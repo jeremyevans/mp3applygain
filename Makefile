@@ -4,7 +4,7 @@
 # Mike Oliphant (oliphant@gtk.org)
 #
 
-CC?= gcc
+CC?= cc
 
 CFLAGS+= -Wall -DHAVE_MEMCPY
 
