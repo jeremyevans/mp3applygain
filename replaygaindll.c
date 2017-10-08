@@ -39,9 +39,7 @@
  */
 
 /*define below tells sourcecode that we are compiling as a Win32 DLL*/
-#ifndef asWIN32DLL
  #define asWIN32DLL  
-#endif 
 
 #include <windows.h>
 #include "gain_analysis.h"

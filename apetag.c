@@ -6,15 +6,9 @@
 #include <memory.h>
 #include <string.h>
 #include <fcntl.h>
-#ifdef WIN32
-#include <io.h>
-#else
 #include <unistd.h>
-#endif
 
-#ifndef WIN32
 #define _stricmp strcasecmp
-#endif /* WIN32 */
 
 int ReadMP3ID3v1Tag(FILE *fi, unsigned char **tagbuff, long *tag_offset) {
     char tmp[128];
@@ -307,25 +301,6 @@ int ReadMP3APETag ( FILE *fp,  struct MP3GainTagInfo *info, struct APETagStruct 
 
 int truncate_file (char *filename, long truncLength) {
 
-#ifdef WIN32
-    
-   int fh, result;
-
-   /* Open a file */
-    if( (fh = _open(filename, _O_RDWR))  != -1 )
-    {
-        if( ( result = _chsize( fh, truncLength ) ) == 0 ) {
-            _close(fh);
-            return 1;
-        } else {
-            _close(fh);
-            return 0;
-        }
-   } else {
-       return 0;
-   }
-
-#else
 
 	int fd;
 
@@ -342,7 +317,6 @@ int truncate_file (char *filename, long truncLength) {
 
 	return 1;
 
-#endif
 }
 
 

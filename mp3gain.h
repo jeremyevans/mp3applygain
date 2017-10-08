@@ -43,11 +43,6 @@
 
 #include "rg_error.h"
 
-#ifdef asWIN32DLL
-
-void changeGain(char *filename, int leftgainchange, int rightgainchange);
-
-#endif 
 
 int deleteFile(char *filename);
 int moveFile(char *currentfilename, char *newfilename);

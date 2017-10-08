@@ -32,29 +32,12 @@
 
 #include "rg_error.h"
 
-#ifndef asWIN32DLL
 extern int gSuccess;
-#endif
 
 void DoError( char * localerrstr, MMRESULT localerrnum )
 {
-#ifndef asWIN32DLL
     gSuccess = 0;
 	fprintf(stdout, "%s", localerrstr);
-#else
-	//send message to DLL's parent
-    mp3gainerr = localerrnum;
-    if (mp3gainerrstr != NULL) {
-        free(mp3gainerrstr);
-		mp3gainerrstr = NULL;
-	}
-    mp3gainerrstr = malloc(strlen(localerrstr) + 1);
-    strcpy(mp3gainerrstr,localerrstr);
-	if  ( (apphandle != 0) && ( apperrmsg != 0 ) )
-	{
-		SendMessage(apphandle, apperrmsg, localerrnum, (LPARAM) localerrstr);
-	}
-#endif
 }
 
 void DoUnkError( char * localerrstr)
@@ -62,19 +45,3 @@ void DoUnkError( char * localerrstr)
 	DoError( localerrstr, MP3GAIN_UNSPECIFED_ERROR );
 }
 
-#ifdef asWIN32DLL
-/*the sendpercentdone sends a windows message to the calling app with the progress 
-  into the file (pdone). The calling app acknowledges the message by returning an 
-  LRESULT. 
-  LRESULT = 0 means continue processing the file.
-  LRESULT != 0 means abort processing this file. 
-*/
-LRESULT sendpercentdone( int pdone, long filesize ) 
-{  //send message to DLL's parent
-	if ( (apphandle != 0)  && ( apppercentdonemsg != 0 ) )
-	{
-		return !(SendNotifyMessage(apphandle, apppercentdonemsg, pdone, filesize));
-	}
-	else return(0); //no calling app defined, send by 0 to continue
-}
-#endif

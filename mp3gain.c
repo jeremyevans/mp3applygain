@@ -50,35 +50,19 @@
 #include <math.h>
 #include "apetag.h"
 #include "id3tag.h"
-#ifdef AACGAIN
-#include "aacgain.h"
-#endif
 
-#ifndef WIN32
 #undef asWIN32DLL
 #ifdef __FreeBSD__
 #include <sys/types.h>
 #endif /* __FreeBSD__ */
 #include <utime.h>
-#endif /* WIN32 */
 
-#ifdef WIN32
-#include <io.h>
-#define SWITCH_CHAR '/'
-#else
 /* time stamp preservation when using temp file */
 # include <sys/stat.h>
 # include <utime.h>
 # include <errno.h>
-# if defined(__BEOS__)
-#  include <fs_attr.h>
-# endif
 #define SWITCH_CHAR '-'
-#endif /* WIN32 */
 
-#ifdef __BEOS__
-#include <bsd_mem.h>
-#endif /* __BEOS__ */
 
 #include <fcntl.h>
 #include <string.h>
@@ -88,11 +72,9 @@
  * Hence the "mpglibDBL" directory
  */
 
-#ifndef asWIN32DLL
 #include "mpglibDBL/interface.h"
 
 #include "gain_analysis.h"
-#endif
 
 #include "mp3gain.h"  /*jzitt*/
 #include "rg_error.h" /*jzitt*/
@@ -108,11 +90,7 @@
 #define AMP_RECALC 2
 #define MIN_MAX_GAIN_RECALC 4
 
-#ifdef AACGAIN
-#define AACGAIN_ARG(x)  , x
-#else
 #define AACGAIN_ARG(x)
-#endif
 
 typedef struct {
 	unsigned long fileposition;
@@ -525,47 +503,13 @@ int moveFile(char *currentfilename, char *newfilename)
 void fileTime(char *filename, timeAction action)
 {
 	static        int  timeSaved=0;
-#ifdef WIN32
-	HANDLE outfh;
-	static FILETIME create_time, access_time, write_time;
-#else
     static struct stat savedAttributes;
-#endif
 
     if (action == storeTime) {
-#ifdef WIN32
-		outfh = CreateFile((LPCTSTR)filename,
-							GENERIC_READ,
-							FILE_SHARE_READ,
-							NULL,
-							OPEN_EXISTING,
-							FILE_ATTRIBUTE_NORMAL,
-							NULL);
-		if (outfh != INVALID_HANDLE_VALUE) {
-			if (GetFileTime(outfh,&create_time,&access_time,&write_time))
-				timeSaved = !0;
-
-			CloseHandle(outfh);
-		}
-#else
         timeSaved = (stat(filename, &savedAttributes) == 0);
-#endif
     }
     else {
         if (timeSaved) {
-#ifdef WIN32
-			outfh = CreateFile((LPCTSTR)filename,
-						GENERIC_WRITE,
-						0,
-						NULL,
-						OPEN_EXISTING,
-						FILE_ATTRIBUTE_NORMAL,
-						NULL);
-			if (outfh != INVALID_HANDLE_VALUE) {
-				SetFileTime(outfh,&create_time,&access_time,&write_time);
-				CloseHandle(outfh);
-			}
-#else
 			struct utimbuf setTime;	
 			
 			setTime.actime = savedAttributes.st_atime;
@@ -573,7 +517,6 @@ void fileTime(char *filename, timeAction action)
 			timeSaved = 0;
 
 			utime(filename, &setTime);
-#endif
 		}
     }      
 }
@@ -582,18 +525,9 @@ unsigned long reportPercentWritten(unsigned long percent, unsigned long bytes)
 {
     int ok = 1;
 
-#ifndef asWIN32DLL
     fprintf(stderr,"                                                \r %2lu%% of %lu bytes written\r"
         ,percent,bytes);
     fflush(stderr);
-#else
-    /* report % back to calling app */
-    ok = sendpercentdone( (int)percent, bytes ); 
-    //non-zero return means error bail out
-    if ( ok != 0)
-	    return 0;
-    ok = 1; /* allow us to continue processing file */
-#endif
 
     return ok;
 }
@@ -679,9 +613,7 @@ void scanFrameGain() {
 	}
 }
 
-#ifndef asWIN32DLL
 static
-#endif
 int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchange, int rightgainchange) {
   unsigned long ok;
   int mode;
@@ -713,17 +645,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
   if ((leftgainchange == 0) && (rightgainchange == 0))
 	  return 0;
 
-#ifdef AACGAIN
-  if (aacH)
-  {
-      int rc = aac_modify_gain(aacH, leftgainchange, rightgainchange, 
-          QuietMode ? NULL : reportPercentWritten);
-      NowWriting = 0;
-      if (rc)
-          passError(MP3GAIN_FILEFORMAT_NOTSUPPORTED, 1, "failed to modify gain\n");
-      return rc;
-  }
-#endif
 
   gainchange[0] = leftgainchange;
   gainchange[1] = rightgainchange;
@@ -836,11 +757,7 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 			frame = 1;
 		} /* if (!ok) else */
 		
-#ifdef asWIN32DLL
-		while (ok && (!blnCancel)) {
-#else
 		while (ok) {
-#endif
 			bitridx = (curframe[2] >> 4) & 0x0F;
 			if (singlechannel) {
 				if ((curframe[3] >> 6) & 0x01) { /* if mode is NOT stereo or dual channel */
@@ -962,81 +879,19 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 		}
 	}
 
-#ifdef asWIN32DLL
-	if (blnCancel) { //need to clean up as best as possible
-		fclose(inf);
-		if (UsingTemp) {
-			fclose(outf);
-			deleteFile(outfilename);
-			free(outfilename);
-			passError(MP3GAIN_CANCELLED,2,"Cancelled processing of ",filename);
-		}
-		else {
-			passError(MP3GAIN_CANCELLED,3,"Cancelled processing.\n", filename, " is probably corrupted now.");
-		}
-		if (saveTime) 
-		  fileTime(filename, setStoredTime);		
-		return;
-	}
-#endif
 
 	if (!QuietMode) {
-#ifndef asWIN32DLL
 		fprintf(stderr,"                                                   \r");
-#else
-		 /* report DONE (100%) message back to calling app */
-		sendpercentdone( 100, gFilesize );
-#endif
 	}
 	fflush(stderr);
 	fflush(stdout);
 	if (UsingTemp) {
 		while (fillBuffer(0));
         fflush(outf);
-#ifdef WIN32
-        outlength = _filelength(_fileno(outf));
-        inlength = _filelength(_fileno(inf));
-#else
 		fseek(outf, 0, SEEK_END);
 		fseek(inf, 0, SEEK_END);
 		outlength=ftell(outf);
 		inlength =ftell(inf); 
-#endif
-#ifdef __BEOS__
-       /* some stuff to preserve attributes */
-       do {
-           DIR *attrs = NULL;
-           struct dirent *de;
-           struct attr_info ai;
-           int infd, outfd;
-           void *attrdata;
-
-           infd = fileno(inf);
-           if (infd < 0)
-               goto attrerror;
-           outfd = fileno(outf);
-           if (outfd < 0)
-               goto attrerror;
-           attrs = fs_fopen_attr_dir(infd);
-           while ((de = fs_read_attr_dir(attrs)) != NULL) {
-               if (fs_stat_attr(infd, de->d_name, &ai) < B_OK)
-                   goto attrerror;
-               if ((attrdata = malloc(ai.size)) == NULL)
-                   goto attrerror;
-               fs_read_attr(infd, de->d_name, ai.type, 0, attrdata, ai.size);
-               fs_write_attr(outfd, de->d_name, ai.type, 0, attrdata, ai.size);
-               free(attrdata);
-           }
-           fs_close_attr_dir(attrs);
-           break;
-       attrerror:
-           if (attrdata)
-               free(attrdata);
-           if (attrs)
-               fs_close_attr_dir(attrs);
-           fprintf(stderr, "can't preserve attributes for '%s': %s\n", filename, strerror(errno));
-       } while (0);
-#endif
 		fclose(outf);
 		fclose(inf);
 		inf = NULL;
@@ -1084,36 +939,12 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 }
 
 
-#ifndef asWIN32DLL
 
-#ifdef AACGAIN
-void WriteAacGainTags (AACGainHandle aacH, struct MP3GainTagInfo *info) {
-    if (info->haveAlbumGain)
-        aac_set_tag_float(aacH, replaygain_album_gain, info->albumGain);
-    if (info->haveAlbumPeak)
-        aac_set_tag_float(aacH, replaygain_album_peak, info->albumPeak);
-    if (info->haveAlbumMinMaxGain)
-        aac_set_tag_int_2(aacH, replaygain_album_minmax, info->albumMinGain, info->albumMaxGain);
-    if (info->haveTrackGain)
-        aac_set_tag_float(aacH, replaygain_track_gain, info->trackGain);
-    if (info->haveTrackPeak)
-        aac_set_tag_float(aacH, replaygain_track_peak, info->trackPeak);
-    if (info->haveMinMaxGain)
-        aac_set_tag_int_2(aacH, replaygain_track_minmax, info->minGain, info->maxGain);
-    if (info->haveUndo)
-        aac_set_tag_int_2(aacH, replaygain_undo, info->undoLeft, info->undoRight);
-}
-#endif
 
 
 static
 void WriteMP3GainTag(char *filename AACGAIN_ARG(AACGainHandle aacH), struct MP3GainTagInfo *info, struct FileTagsStruct *fileTags, int saveTimeStamp)
 {
-#ifdef AACGAIN
-	if (aacH) {
-		WriteAacGainTags(aacH, info);
-	} else
-#endif
 	if (useId3) {
 		/* Write ID3 tag; remove stale APE tag if it exists. */
 		if (WriteMP3GainID3Tag(filename, info, saveTimeStamp) >= 0)
@@ -1223,11 +1054,7 @@ int queryUserForClipping(char * argv_mainloop,int intGainChange)
 
 static
 void showVersion(char *progname) {
-#ifdef AACGAIN
-	fprintf(stderr,"aacgain version %s, derived from mp3gain version %s\n",AACGAIN_VERSION,MP3GAIN_VERSION);
-#else
 	fprintf(stderr,"%s version %s\n",progname,MP3GAIN_VERSION);
-#endif
 }
 
 
@@ -1264,11 +1091,6 @@ void wrapExplanation() {
     fprintf(stderr,"   the gain change is a positive number\n");
     fprintf(stderr,"\n");
     fprintf(stderr,"To use the original \"wrapping\" behavior, use the \"%cw\" switch.\n",SWITCH_CHAR);
-#ifdef AACGAIN
-    fprintf(stderr,"\n");
-    fprintf(stderr,"The \"%cw\" switch is not supported for AAC files. An attempt to wrap\n",SWITCH_CHAR);
-    fprintf(stderr,"an AAC file is treated as an error, and the file will not be modified.\n");
-#endif
     exit(0);
 
 }
@@ -1279,14 +1101,7 @@ static
 void errUsage(char *progname) {
 	showVersion(progname);
 	fprintf(stderr,"copyright(c) 2001-2009 by Glen Sawyer\n");
-#ifdef AACGAIN
-	fprintf(stderr,"AAC support copyright(c) 2004-2009 David Lasker, Altos Design, Inc.\n");
-#endif
 	fprintf(stderr,"uses mpglib, which can be found at http://www.mpg123.de\n");
-#ifdef AACGAIN
-    fprintf(stderr,"AAC support uses faad2 (http://www.audiocoding.com), and\n");
-    fprintf(stderr,"mpeg4ip's mp4v2 (http://www.mpeg4ip.net)\n");
-#endif
 	fprintf(stderr,"Usage: %s [options] <infile> [<infile 2> ...]\n",progname);
 	fprintf(stderr,"  --use %c? or %ch for a full list of options\n",SWITCH_CHAR,SWITCH_CHAR);
     fclose(stdout);
@@ -1300,14 +1115,7 @@ static
 void fullUsage(char *progname) {
 		showVersion(progname);
 		fprintf(stderr,"copyright(c) 2001-2009 by Glen Sawyer\n");
-#ifdef AACGAIN
-	    fprintf(stderr,"AAC support copyright(c) 2004-2009 David Lasker, Altos Design, Inc.\n");
-#endif
 		fprintf(stderr,"uses mpglib, which can be found at http://www.mpg123.de\n");
-#ifdef AACGAIN
-        fprintf(stderr,"AAC support uses faad2 (http://www.audiocoding.com), and\n");
-        fprintf(stderr,"mpeg4ip's mp4v2 (http://www.mpeg4ip.net)\n");
-#endif
 		fprintf(stderr,"Usage: %s [options] <infile> [<infile 2> ...]\n",progname);
 		fprintf(stderr,"options:\n");
 		fprintf(stderr,"\t%cv - show version number\n",SWITCH_CHAR);
@@ -1329,17 +1137,11 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%co - output is a database-friendly tab-delimited list\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%ct - writes modified data to temp file, then deletes original\n",SWITCH_CHAR);
 		fprintf(stderr,"\t     instead of modifying bytes in original file\n");
-#ifdef AACGAIN
-		fprintf(stderr,"\t     A temp file is always used for AAC files.\n");
-#endif
 		fprintf(stderr,"\t%cq - Quiet mode: no status messages\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cp - Preserve original file timestamp\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cx - Only find max. amplitude of file\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cf - Assume input file is an MPEG 2 Layer III file\n",SWITCH_CHAR);
 		fprintf(stderr,"\t     (i.e. don't check for mis-named Layer I or Layer II files)\n");
-#ifdef AACGAIN
-		fprintf(stderr,"\t      This option is ignored for AAC files.\n");
-#endif
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
 		fprintf(stderr,"\t%cs c - only check stored tag info (no other processing)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs d - delete stored tag info (no other processing)\n",SWITCH_CHAR);
@@ -1349,11 +1151,7 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%cs a - use APE tag for MP3 gain info (default)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cu - undo changes made (based on stored tag info)\n",SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
-#ifdef AACGAIN
-        fprintf(stderr,"\t      MP3 only. (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
-#else
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
-#endif
 		fprintf(stderr,"If you specify %cr and %ca, only the second one will work\n",SWITCH_CHAR,SWITCH_CHAR);
 		fprintf(stderr,"If you do not specify %cc, the program will stop and ask before\n     applying gain change to a file that might clip\n",SWITCH_CHAR);
         fclose(stdout);
@@ -1361,39 +1159,6 @@ void fullUsage(char *progname) {
 		exit(0);
 }
 
-#ifdef AACGAIN
-void ReadAacTags(AACGainHandle gh, struct MP3GainTagInfo *info)
-{
-    int p1, p2;
-
-    if (aac_get_tag_float(gh, replaygain_album_gain, &info->albumGain) == 0)
-        info->haveAlbumGain = !0;
-    if (aac_get_tag_float(gh, replaygain_album_peak, &info->albumPeak) == 0)
-        info->haveAlbumPeak = !0;
-    if (aac_get_tag_int_2(gh, replaygain_album_minmax, &p1, &p2) == 0)
-    {
-        info->albumMinGain = p1;
-        info->albumMaxGain = p2;
-        info->haveAlbumMinMaxGain = !0;
-    }
-    if (aac_get_tag_float(gh, replaygain_track_gain, &info->trackGain) == 0)
-        info->haveTrackGain = !0;
-    if (aac_get_tag_float(gh, replaygain_track_peak, &info->trackPeak) == 0)
-        info->haveTrackPeak = !0;
-    if (aac_get_tag_int_2(gh, replaygain_track_minmax, &p1, &p2) == 0)
-    {
-        info->minGain = p1;
-        info->maxGain = p2;
-        info->haveMinMaxGain = !0;
-    }
-    if (aac_get_tag_int_2(gh, replaygain_undo, &p1, &p2) == 0)
-    {
-        info->undoLeft = p1;
-        info->undoRight = p2;
-        info->haveUndo = !0;
-    }
-}
-#endif
 
 void dumpTaginfo(struct MP3GainTagInfo *info) {
   fprintf(stderr, "haveAlbumGain       %d  albumGain %f\n",info->haveAlbumGain, info->albumGain);
@@ -1405,11 +1170,7 @@ void dumpTaginfo(struct MP3GainTagInfo *info) {
 }
 
 
-#ifdef WIN32
-int __cdecl main(int argc, char **argv) { /*make sure this one is standard C declaration*/
-#else
 int main(int argc, char **argv) {
-#endif
 	MPSTR mp;
 	unsigned long ok;
 	int mode;
@@ -1462,9 +1223,6 @@ int main(int argc, char **argv) {
 	unsigned char curAlbumMaxGain = 0;
 	char chtmp;
 
-#ifdef AACGAIN
-    AACGainHandle *aacInfo;
-#endif
 
     gSuccess = 1;
 
@@ -1478,12 +1236,8 @@ int main(int argc, char **argv) {
 	numFiles = 0;
 
 	for (i = 1; i < argc; i++) {
-#ifdef WIN32
-		if ((argv[i][0] == '/')||((argv[i][0] == '-') && (strlen(argv[i])==2))) { /* don't need to force single-character command parameters */
-#else
 		if (((argv[i][0] == '/')||(argv[i][0] == '-'))&&
 		    (strlen(argv[i])==2)) {
-#endif
 			fileStart++;
 			switch(argv[i][1]) {
 				case 'a':
@@ -1719,9 +1473,6 @@ int main(int argc, char **argv) {
     tagInfo = (struct MP3GainTagInfo *)calloc(argc, sizeof(struct MP3GainTagInfo));
 	fileTags = (struct FileTagsStruct *)malloc(sizeof(struct FileTagsStruct) * argc);
 
-#ifdef AACGAIN
-    aacInfo = (AACGainHandle)malloc(sizeof(AACGainHandle) * argc);
-#endif
 
     if (databaseFormat) {
 		if (checkTagOnly) {
@@ -1752,28 +1503,8 @@ int main(int argc, char **argv) {
 	  tagInfo[mainloop].haveAlbumMinMaxGain = 0;
 	  tagInfo[mainloop].recalc = 0;
 
-#ifdef AACGAIN
-      //check for aac file; open it if found
-      //note: we try to open aac even if /f (reckless)
-      if (aac_open(curfilename, UsingTemp, saveTime, &aacInfo[mainloop]) != 0)
-      {
-          //in case of any errors, don't continue processing so there is no risk of corrupting
-          //a bad file
-          passError(MP3GAIN_FILEFORMAT_NOTSUPPORTED, 2,
-              curfilename, " is not a valid mp4/m4a file.\n");
-          exit(1);
-      }
-#endif
 	  
       if ((!skipTag)&&(!deleteTag)) {
-#ifdef AACGAIN
-          if (aacInfo[mainloop])
-          {
-              if (!skipTag)
-                  ReadAacTags(aacInfo[mainloop], &(tagInfo[mainloop]));
-          }
-          else
-#endif
 		{
 			ReadMP3GainAPETag(curfilename,&(tagInfo[mainloop]),&(fileTags[mainloop]));
 			if (useId3) {
@@ -1870,9 +1601,6 @@ int main(int argc, char **argv) {
 	}
 
     for (mainloop = fileStart; mainloop < argc; mainloop++) {
-#ifdef AACGAIN
-        AACGainHandle aacH = aacInfo[mainloop];
-#endif
         memset(&mp, 0, sizeof(mp));
 
 	  // if the entire Album requires some kind of recalculation, then each track needs it
@@ -2028,11 +1756,6 @@ int main(int argc, char **argv) {
 			  fprintf(stderr,"\ndone\n");
 	  }
       else if (deleteTag) {
-#ifdef AACGAIN
-          if (aacH)
-              aac_clear_rg_tags(aacH);
-          else
-#endif
           {
               RemoveMP3GainAPETag(argv[mainloop], saveTime);
               if (useId3) {
@@ -2051,24 +1774,14 @@ int main(int argc, char **argv) {
 		  if (tagInfo[mainloop].recalc > 0) {
 			  gFilesize = getSizeOfFile(argv[mainloop]);
 
-#ifdef AACGAIN
-              if (!aacH)
-#endif
     			  inf = fopen(argv[mainloop],"rb");
 		  }
 
-#ifdef AACGAIN
-		  if (!aacH&&(inf == NULL)&&(tagInfo[mainloop].recalc > 0)) {
-#else
 		  if ((inf == NULL)&&(tagInfo[mainloop].recalc > 0)) {
-#endif
 			  fprintf(stdout, "Can't open %s for reading\n",argv[mainloop]);
               fflush(stdout);
 		  }
 		  else {
-#ifdef AACGAIN
-            if (!aacH)
-#endif
     			InitMP3(&mp);
 			if (tagInfo[mainloop].recalc == 0) {
 				maxsample = tagInfo[mainloop].trackPeak * 32768.0;
@@ -2082,42 +1795,6 @@ int main(int argc, char **argv) {
 				else {
 					maxsample = 0;
 				}
-#ifdef AACGAIN
-                if (aacH)
-                {
-                    int rc;
-
-					if (first) {
-						lastfreq = aac_get_sample_rate(aacH);
-						InitGainAnalysis((long)lastfreq);
-						analysisError = 0;
-						first = 0;
-					}
-					else {
-						if (aac_get_sample_rate(aacH) != lastfreq) {
-							lastfreq = aac_get_sample_rate(aacH);
-							ResetSampleFrequency ((long)lastfreq);
-						}
-                    }
-
-                    numFiles++;
-
-                    if (maxAmpOnly)
-                        rc = aac_compute_peak(aacH, &maxsample, &mingain, &maxgain, 
-                            QuietMode ? NULL : reportPercentAnalyzed);
-                    else
-                        rc = aac_compute_gain(aacH, &maxsample, &mingain, &maxgain, 
-                            QuietMode ? NULL : reportPercentAnalyzed);
-                    //in case of any error, bail to avoid corrupting file
-                    if (rc != 0)
-                    {
-                        passError(MP3GAIN_FILEFORMAT_NOTSUPPORTED, 2,
-                            curfilename, " is not a valid mp4/m4a file.\n");
-                        exit(1);
-                    }
-                    ok = !0;
-                } else 
-#endif
                   {
 				    BadLayer = 0;
 				    LayerSet = Reckless;
@@ -2130,11 +1807,7 @@ int main(int argc, char **argv) {
                 }
 			}
 			if (ok) {
-#ifdef AACGAIN
-				if (!aacH && (tagInfo[mainloop].recalc > 0)) {
-#else
 				if (tagInfo[mainloop].recalc > 0) {
-#endif
 					wrdpntr = buffer;
 
 					ok = skipID3v2();
@@ -2142,11 +1815,7 @@ int main(int argc, char **argv) {
 					ok = frameSearch(!0);
 				}
 				
-#ifdef AACGAIN
-				if (!ok && !aacH) {
-#else
 				if (!ok) {
-#endif
                     if (!BadLayer) {
 						fprintf(stdout,"Can't find any valid MP3 frames in file %s\n",argv[mainloop]);
                         fflush(stdout);
@@ -2158,16 +1827,9 @@ int main(int argc, char **argv) {
 								   * bitstream corruption
 								   */
 					fileok[mainloop] = !0;
-#ifdef AACGAIN
-					if (!aacH || (tagInfo[mainloop].recalc == 0))
-#endif
                         numFiles++;
 					
-#ifdef AACGAIN
-					if (!aacH && (tagInfo[mainloop].recalc > 0)) {
-#else
 					if (tagInfo[mainloop].recalc > 0) {
-#endif
 						mode = (curframe[3] >> 6) & 3;
 
 						if ((curframe[1] & 0x08) == 0x08) /* MPEG 1 */
@@ -2249,28 +1911,7 @@ int main(int argc, char **argv) {
 									minGain = &mingain;
 									procSamp = 0;
 									if ((tagInfo[mainloop].recalc & AMP_RECALC) || (tagInfo[mainloop].recalc & FULL_RECALC)) {
-#ifdef WIN32
-#ifndef __GNUC__
-										__try { /* this is the Windows try/catch equivalent for C.
-												   If you want this in some other system, you should be
-												   able to use the C++ try/catch mechanism. I've tried to keep
-												   all of the code plain C, though. This error only
-												   occurs with _very_ corrupt mp3s, so I don't know if you'll
-												   think it's worth the trouble */
-#endif
-#endif
 											decodeSuccess = decodeMP3(&mp,curframe,bytesinframe,&nprocsamp);
-#ifdef WIN32
-#ifndef __GNUC__
-										}
-										__except(1) {
-											fprintf(stderr,"Error analyzing %s. This mp3 has some very corrupt data.\n",curfilename);
-											fclose(stdout);
-											fclose(stderr);
-											exit(1);
-										}
-#endif
-#endif
 									} else { /* don't need to actually decode frame, 
 												just scan for min/max gain values */
 										decodeSuccess = !MP3_OK;
@@ -2427,9 +2068,6 @@ int main(int argc, char **argv) {
 				}
 			}
 			
-#ifdef AACGAIN
-            if (!aacH)
-#endif
     			ExitMP3(&mp);
 			fflush(stderr);
 			fflush(stdout);
@@ -2618,17 +2256,9 @@ int main(int argc, char **argv) {
 		if (fileTags[mainloop].id31tag) {
 			free(fileTags[mainloop].id31tag);
 		}
-#ifdef AACGAIN
-        //close any open aac files
-        if (aacInfo[mainloop])
-            aac_close(aacInfo[mainloop]);
-#endif
 	}
 	free(fileTags);
 
-#ifdef AACGAIN
-    free(aacInfo);
-#endif
     fclose(stdout);
     fclose(stderr);
 	if (gSuccess)
@@ -2637,4 +2267,3 @@ int main(int argc, char **argv) {
 		return 1;
 }
 
-#endif /* asWIN32DLL */
