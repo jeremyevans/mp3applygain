@@ -118,7 +118,6 @@ int Reckless = 0;
 int wrapGain = 0;
 int undoChanges = 0;
 
-int deleteTag = 0;
 int forceRecalculateTag = 0;
 int checkTagOnly = 0;
 static int useId3 = 0;
@@ -1143,7 +1142,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t     (i.e. don't check for mis-named Layer I or Layer II files)\n");
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
 		fprintf(stderr,"\t%cs c - only check stored tag info (no other processing)\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cs d - delete stored tag info (no other processing)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs r - force re-calculation (do not read tag info)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs i - use ID3v2 tag for MP3 gain info\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs a - use APE tag for MP3 gain info (default)\n",SWITCH_CHAR);
@@ -1400,10 +1398,6 @@ int main(int argc, char **argv) {
                         case 'C':
                             checkTagOnly = !0;
                             break;
-                        case 'd':
-                        case 'D':
-                            deleteTag = !0;
-                            break;
                         case 'r':
                         case 'R':
                             forceRecalculateTag = !0;
@@ -1645,18 +1639,6 @@ int main(int argc, char **argv) {
 		  if ((!QuietMode) && (gSuccess == 1))
 			  fprintf(stderr,"\ndone\n");
 	  }
-      else if (deleteTag) {
-          {
-              RemoveMP3GainAPETag(argv[mainloop], saveTime);
-              if (useId3) {
-                  RemoveMP3GainID3Tag(argv[mainloop], saveTime);
-              }
-          }
-          if ((!QuietMode)&&(!databaseFormat))
-              fprintf(stderr,"Deleting tag info of %s...\n", argv[mainloop]);
-          if (databaseFormat)
-              fprintf(stdout,"%s\tNA\tNA\tNA\tNA\tNA\n", argv[mainloop]);
-      }
 	  else {
 		  if (!databaseFormat)
 		    fprintf(stdout,"%s\n",argv[mainloop]);
