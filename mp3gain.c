@@ -118,7 +118,6 @@ int Reckless = 0;
 int wrapGain = 0;
 int undoChanges = 0;
 
-int checkTagOnly = 0;
 static int useId3 = 0;
 
 int gSuccess;
@@ -1140,7 +1139,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%cf - Assume input file is an MPEG 2 Layer III file\n",SWITCH_CHAR);
 		fprintf(stderr,"\t     (i.e. don't check for mis-named Layer I or Layer II files)\n");
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
-		fprintf(stderr,"\t%cs c - only check stored tag info (no other processing)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cu - undo changes made (based on stored tag info)\n",SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
@@ -1375,29 +1373,6 @@ int main(int argc, char **argv) {
 					applyAlbum = 0;
 					break;
 
-                case 's':
-                case 'S':
-					chtmp = 0;
-					if (argv[i][2] == '\0') {
-						if (i+1 < argc) {
-							i++;
-							fileStart++;
-							chtmp = argv[i][0];
-						} else {
-							errUsage(argv[0]);
-						}
-					} else {
-						chtmp = argv[i][2];
-					}
-		            switch (chtmp) {
-                        case 'c':
-                        case 'C':
-                            checkTagOnly = !0;
-                            break;
-                    }
-
-                    break;
-
 				case 't':
 				case 'T':
 					UsingTemp = !0;
@@ -1445,9 +1420,7 @@ int main(int argc, char **argv) {
 
 
     if (databaseFormat) {
-		if (checkTagOnly) {
-			fprintf(stdout,"File\tMP3 gain\tdB gain\tMax Amplitude\tMax global_gain\tMin global_gain\tAlbum gain\tAlbum dB gain\tAlbum Max Amplitude\tAlbum Max global_gain\tAlbum Min global_gain\n");
-		} else if (undoChanges) {
+		if (undoChanges) {
 			fprintf(stdout,"File\tleft global_gain change\tright global_gain change\n");
 		} else {
 			fprintf(stdout,"File\tMP3 gain\tdB gain\tMax Amplitude\tMax global_gain\tMin global_gain\n");
@@ -1486,98 +1459,7 @@ int main(int argc, char **argv) {
 	  tagInfo[mainloop].recalc |= albumRecalc; 
 
 	  curfilename = argv[mainloop];
-      if (checkTagOnly) {
-          curTag = tagInfo + mainloop;
-          if (curTag->haveTrackGain) {
-		    dblGainChange = curTag->trackGain / (5.0 * log10(2.0));
-
-		    if (fabs(dblGainChange) - (double)((int)(fabs(dblGainChange))) < 0.5)
-			    intGainChange = (int)(dblGainChange);
-		    else
-			    intGainChange = (int)(dblGainChange) + (dblGainChange < 0 ? -1 : 1);
-          }
-		  if (curTag->haveAlbumGain) {
-		    dblGainChange = curTag->albumGain / (5.0 * log10(2.0));
-
-		    if (fabs(dblGainChange) - (double)((int)(fabs(dblGainChange))) < 0.5)
-			    intAlbumGainChange = (int)(dblGainChange);
-		    else
-			    intAlbumGainChange = (int)(dblGainChange) + (dblGainChange < 0 ? -1 : 1);
-		  }
-            if (!databaseFormat) {
-		        fprintf(stdout,"%s\n",argv[mainloop]);
-                if (curTag->haveTrackGain) {
-                    fprintf(stdout,"Recommended \"Track\" dB change: %f\n",curTag->trackGain);
-			        fprintf(stdout,"Recommended \"Track\" mp3 gain change: %d\n",intGainChange);
-                    if (curTag->haveTrackPeak) {
-			            if (curTag->trackPeak * (Float_t)(pow(2.0,(double)(intGainChange)/4.0)) > 1.0) {
-				            fprintf(stdout,"WARNING: some clipping may occur with this gain change!\n");
-			            }
-                    }
-                }
-                if (curTag->haveTrackPeak)
-			        fprintf(stdout,"Max PCM sample at current gain: %f\n",curTag->trackPeak * 32768.0);
-                if (curTag->haveMinMaxGain) {
-                    fprintf(stdout,"Max mp3 global gain field: %d\n",curTag->maxGain);
-                    fprintf(stdout,"Min mp3 global gain field: %d\n",curTag->minGain);
-                }
-				if (curTag->haveAlbumGain) {
-                    fprintf(stdout,"Recommended \"Album\" dB change: %f\n",curTag->albumGain);
-			        fprintf(stdout,"Recommended \"Album\" mp3 gain change: %d\n",intAlbumGainChange);
-                    if (curTag->haveTrackPeak) {
-			            if (curTag->trackPeak * (Float_t)(pow(2.0,(double)(intAlbumGainChange)/4.0)) > 1.0) {
-				            fprintf(stdout,"WARNING: some clipping may occur with this gain change!\n");
-			            }
-                    }
-				}
-				if (curTag->haveAlbumPeak) {
-			        fprintf(stdout,"Max Album PCM sample at current gain: %f\n",curTag->albumPeak * 32768.0);
-				}
-                if (curTag->haveAlbumMinMaxGain) {
-                    fprintf(stdout,"Max Album mp3 global gain field: %d\n",curTag->albumMaxGain);
-                    fprintf(stdout,"Min Album mp3 global gain field: %d\n",curTag->albumMinGain);
-                }
-			    fprintf(stdout,"\n");
-            } else {
-			    fprintf(stdout,"%s\t",argv[mainloop]);
-                if (curTag->haveTrackGain) {
-                    fprintf(stdout,"%d\t",intGainChange);
-			        fprintf(stdout,"%f\t",curTag->trackGain);
-                } else {
-                    fprintf(stdout,"NA\tNA\t");
-                }
-                if (curTag->haveTrackPeak) {
-                    fprintf(stdout,"%f\t",curTag->trackPeak * 32768.0);
-                } else {
-                    fprintf(stdout,"NA\t");
-                }
-                if (curTag->haveMinMaxGain) {
-                    fprintf(stdout,"%d\t",curTag->maxGain);
-			        fprintf(stdout,"%d\t",curTag->minGain);
-                } else {
-                    fprintf(stdout,"NA\tNA\t");
-                }
-                if (curTag->haveAlbumGain) {
-                    fprintf(stdout,"%d\t",intAlbumGainChange);
-			        fprintf(stdout,"%f\t",curTag->albumGain);
-                } else {
-                    fprintf(stdout,"NA\tNA\t");
-                }
-                if (curTag->haveAlbumPeak) {
-                    fprintf(stdout,"%f\t",curTag->albumPeak * 32768.0);
-                } else {
-                    fprintf(stdout,"NA\t");
-                }
-                if (curTag->haveAlbumMinMaxGain) {
-                    fprintf(stdout,"%d\t",curTag->albumMaxGain);
-			        fprintf(stdout,"%d\n",curTag->albumMinGain);
-                } else {
-                    fprintf(stdout,"NA\tNA\n");
-                }
-			    fflush(stdout);
-		    }
-      }
-	  else if (undoChanges) {
+	  if (undoChanges) {
 		  directGain = !0; /* so we don't write the tag a second time */
 		  if ((tagInfo[mainloop].haveUndo)&&(tagInfo[mainloop].undoLeft || tagInfo[mainloop].undoRight)) {
 				if ((!QuietMode)&&(!databaseFormat))
