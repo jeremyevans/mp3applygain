@@ -8,6 +8,7 @@ CC?= cc
 CFLAGS+= -Wall
 INSTALL_PATH= /usr/local/bin
 LIBS= -lm
+VERSION = 1.0.0
 
 all: mp3applygain
 
@@ -22,3 +23,9 @@ uninstall:
 
 clean: 
 	rm -f mp3applygain
+
+dist: clean
+	cd .. && tar -s '/mp3applygain/mp3applygain-${VERSION}/' \
+		-zcf mp3applygain-${VERSION}.tar.gz \
+		mp3applygain/{README,lgpl.txt,mp3applygain.c,Makefile} && \
+		mv mp3applygain-${VERSION}.tar.gz mp3applygain
