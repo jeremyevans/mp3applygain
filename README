@@ -1,0 +1,48 @@
+mp3applygain
+============
+
+mp3applygain applies gain information directly to mp3 files, by
+modifying the frames of the file.  It is designed to normalize
+audio volume for playback by mp3 players which do not support
+replygain natively (common in hardware mp3 players).
+
+Usage
+-----
+
+  mp3applygain gain mod filename
+
+gain is the replaygain as a file, which should be a floating
+point number.  You can use rgain or a similar program to
+calculate the replaygain for the file.
+
+mod is an integer modification to the calculated gain. This
+can be 0 to not modify the calculated gain.
+
+filename is the name of the file to modify.
+
+Example:
+
+  mp3applygain 3.85 2 file.mp3
+
+Caveats
+-------
+
+Applying gain to the mp3 modifies the mp3, and this does not
+store any information allowing you to undo the change, though
+you can rerun it with the gain and mod both multiplied by -1
+to reverse it.  Do not run this program on original mp3s, only
+on copies that are safe to modify.
+
+History
+-------
+
+mp3applygain was forked from mp3gain 1.5.2. Almost all code
+was removed, including the insecure embedded mpglib code and
+code related to replaygain calculation. The only code remaining
+is the code related to applying gain information to the audio
+data frames.
+
+Maintainer
+----------
+
+Jeremy Evans <code@jeremyevans.net>
