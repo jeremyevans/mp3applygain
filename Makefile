@@ -11,7 +11,7 @@ LIBS= -lm
 
 all: mp3applygain
 
-mp3applygain:
+mp3applygain: mp3gain.c
 	$(CC) $(LDFLAGS) -o mp3applygain mp3gain.c $(LIBS)
 
 install: mp3applygain
