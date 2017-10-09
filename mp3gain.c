@@ -129,8 +129,6 @@ FILE *inf = NULL;
 
 FILE *outf;
 
-short int saveTime;
-
 unsigned long filepos;
 
 static const double bitrate[4][16] = {
@@ -642,9 +640,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
   gainchange[1] = rightgainchange;
   singlechannel = !(leftgainchange == rightgainchange);
 	  
-  if (saveTime)
-    fileTime(filename, storeTime);
-  
   gFilesize = getSizeOfFile(filename);
 
   if (UsingTemp) {
@@ -911,8 +906,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
                     " yourself.\n");
 			    return M3G_ERR_RENAME_TMP;
 		    };
-		    if (saveTime)
-		       fileTime(filename, setStoredTime);
         }
 		free(outfilename);
 	}
@@ -920,8 +913,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 		flushWriteBuff();
 		fclose(inf);
 		inf = NULL;
-		if (saveTime) 
-		  fileTime(filename, setStoredTime);		
 	}
   }
 
@@ -1015,7 +1006,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%ct - writes modified data to temp file, then deletes original\n",SWITCH_CHAR);
 		fprintf(stderr,"\t     instead of modifying bytes in original file\n");
 		fprintf(stderr,"\t%cq - Quiet mode: no status messages\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cp - Preserve original file timestamp\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
@@ -1096,8 +1086,6 @@ int main(int argc, char **argv) {
 		errUsage(argv[0]);
 	}
 
-    maxAmpOnly = 0;
-    saveTime = 0;
 	fileStart = 1;
 	numFiles = 0;
 
@@ -1221,11 +1209,6 @@ int main(int argc, char **argv) {
 				case 'o':
 				case 'O':
 					databaseFormat = !0;
-					break;
-
-				case 'p':
-				case 'P':
-					saveTime = !0;
 					break;
 
 				case 'q':
