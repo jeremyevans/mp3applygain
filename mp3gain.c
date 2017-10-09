@@ -612,7 +612,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
   char *outfilename;
   int gainchange[2];
   int singlechannel;
-  long outlength, inlength; /* size checker when using Temp files */
 
   outfilename = NULL;
   frame = 0;
@@ -946,7 +945,6 @@ int main(int argc, char **argv) {
 	double dBchange;
 	double dblGainChange;
 	int intGainChange = 0;
-	int intAlbumGainChange = 0;
 	int nprocsamp;
 	int first = 1;
 	int mainloop;
@@ -977,12 +975,6 @@ int main(int argc, char **argv) {
 	struct MP3GainTagInfo *curTag;
 	struct FileTagsStruct *fileTags;
 	int albumRecalc;
-	double curAlbumGain = 0;
-	double curAlbumPeak = 0;
-	unsigned char curAlbumMinGain = 0;
-	unsigned char curAlbumMaxGain = 0;
-	char chtmp;
-
 
     gSuccess = 1;
 
