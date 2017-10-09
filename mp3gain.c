@@ -1016,7 +1016,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t     instead of modifying bytes in original file\n");
 		fprintf(stderr,"\t%cq - Quiet mode: no status messages\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cp - Preserve original file timestamp\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cx - Only find max. amplitude of file\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
@@ -1257,11 +1256,6 @@ int main(int argc, char **argv) {
 					wrapGain = !0;
 					break;
 
-				case 'x':
-				case 'X':
-					maxAmpOnly = !0;
-					break;
-
 				case 'e':
 				case 'E':
 					analysisTrack = !0;
@@ -1433,27 +1427,22 @@ int main(int argc, char **argv) {
 						
 						frame = 1;
 						
-						if (!maxAmpOnly) {
-							if (ok) {
-								mpegver = (curframe[1] >> 3) & 0x03;
-								freqidx = (curframe[2] >> 2) & 0x03;
-								
-								if (first) {
+						if (ok) {
+							mpegver = (curframe[1] >> 3) & 0x03;
+							freqidx = (curframe[2] >> 2) & 0x03;
+							
+							if (first) {
+								lastfreq = frequency[mpegver][freqidx];
+								InitGainAnalysis((long)(lastfreq * 1000.0));
+								analysisError = 0;
+								first = 0;
+							}
+							else {
+								if (frequency[mpegver][freqidx] != lastfreq) {
 									lastfreq = frequency[mpegver][freqidx];
-									InitGainAnalysis((long)(lastfreq * 1000.0));
-									analysisError = 0;
-									first = 0;
-								}
-								else {
-									if (frequency[mpegver][freqidx] != lastfreq) {
-										lastfreq = frequency[mpegver][freqidx];
-										ResetSampleFrequency ((long)(lastfreq * 1000.0));
-									}
+									ResetSampleFrequency ((long)(lastfreq * 1000.0));
 								}
 							}
-						}
-						else {
-							analysisError = 0;
 						}
 					
 						while (ok) {
@@ -1487,7 +1476,7 @@ int main(int argc, char **argv) {
 										scanFrameGain();//curframe);
 									}
 									if (decodeSuccess == MP3_OK) {
-										if ((!maxAmpOnly)&&(tagInfo[mainloop].recalc & FULL_RECALC)) {
+										if ((tagInfo[mainloop].recalc & FULL_RECALC)) {
 											if (AnalyzeSamples(lsamples,rsamples,procSamp/nchan,nchan) == GAIN_ANALYSIS_ERROR) {
 												fprintf(stderr,"Error analyzing further samples (max time reached)          \n");
 												analysisError = !0;
@@ -1516,10 +1505,7 @@ int main(int argc, char **argv) {
 					fprintf(stderr,"                                                 \r");
 
 					if (tagInfo[mainloop].recalc & FULL_RECALC) {
-						if (maxAmpOnly)
-							dBchange = 0;
-						else
-							dBchange = GetTitleGain();
+						dBchange = GetTitleGain();
 					} else {
 						dBchange = tagInfo[mainloop].trackGain;
 					}
@@ -1532,17 +1518,15 @@ int main(int argc, char **argv) {
 					else {
 						/* even if skipTag is on, we'll leave this part running just to store the minpeak and maxpeak */
 						curTag = tagInfo + mainloop;
-						if (!maxAmpOnly) {
-							if ( /* if we don't already have a tagged track gain OR we have it, but it doesn't match */
-								 !curTag->haveTrackGain || 
-								 (curTag->haveTrackGain && 
-									(fabs(dBchange - curTag->trackGain) >= 0.01))
-							   ) {
-								curTag->dirty = !0;
-								curTag->haveTrackGain = 1;
-								curTag->trackGain = dBchange;
-							}
-						}						
+						if ( /* if we don't already have a tagged track gain OR we have it, but it doesn't match */
+							 !curTag->haveTrackGain || 
+							 (curTag->haveTrackGain && 
+								(fabs(dBchange - curTag->trackGain) >= 0.01))
+						   ) {
+							curTag->dirty = !0;
+							curTag->haveTrackGain = 1;
+							curTag->trackGain = dBchange;
+						}
 						if (!curTag->haveMinMaxGain || /* if minGain or maxGain doesn't match tag */
 								(curTag->haveMinMaxGain && 
 									(curTag->minGain != mingain || curTag->maxGain != maxgain))) {
@@ -1627,10 +1611,7 @@ int main(int argc, char **argv) {
 
 	if ((numFiles > 0)&&(!applyTrack)&&(!analysisTrack)) {
 		if (albumRecalc & FULL_RECALC) {
-			if (maxAmpOnly)
-				dBchange = 0;
-			else
-				dBchange = GetAlbumGain();
+			dBchange = GetAlbumGain();
 		} else {
 			/* the following if-else is for the weird case where someone applies "Album" gain to
 			   a single file, but the file doesn't actually have an Album field */
