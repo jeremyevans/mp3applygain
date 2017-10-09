@@ -1106,9 +1106,6 @@ int WriteMP3GainID3Tag(char *filename, struct MP3GainTagInfo *info, int saveTime
 	struct ID3v2FrameStruct *frame, **pframe;
 	int ret, need_update;
 
-	if (saveTimeStamp)
-		fileTime(filename, storeTime);
-
 	f = fopen(filename, "rb");
 	if (f == NULL) {
 		passError(MP3GAIN_UNSPECIFED_ERROR, 3, "Could not open ", filename, "\n");
@@ -1257,9 +1254,6 @@ int WriteMP3GainID3Tag(char *filename, struct MP3GainTagInfo *info, int saveTime
 		remove(tmpfilename);
 		passError(MP3GAIN_UNSPECIFED_ERROR, 5, "Can not rename ", tmpfilename, " to ", filename, "\n");
 		ret = M3G_ERR_RENAME_TMP;
-	} else {
-		if (saveTimeStamp)
-			fileTime(filename, setStoredTime);
 	}
 
 	free(tmpfilename);

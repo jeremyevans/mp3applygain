@@ -461,44 +461,6 @@ long getSizeOfFile(char *filename)
 }
 
 
-int deleteFile(char *filename)
-{
-    return remove(filename);
-}
-
-int moveFile(char *currentfilename, char *newfilename)
-{
-    return rename(currentfilename, newfilename);
-}
-
-
-
-	/* Get File size and datetime stamp */
-
-
-
-
-void fileTime(char *filename, timeAction action)
-{
-	static        int  timeSaved=0;
-    static struct stat savedAttributes;
-
-    if (action == storeTime) {
-        timeSaved = (stat(filename, &savedAttributes) == 0);
-    }
-    else {
-        if (timeSaved) {
-			struct utimbuf setTime;	
-			
-			setTime.actime = savedAttributes.st_atime;
-			setTime.modtime = savedAttributes.st_mtime;
-			timeSaved = 0;
-
-			utime(filename, &setTime);
-		}
-    }      
-}
-
 unsigned long reportPercentWritten(unsigned long percent, unsigned long bytes)
 {
     int ok = 1;

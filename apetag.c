@@ -373,9 +373,6 @@ int WriteMP3GainAPETag (char *filename, struct MP3GainTagInfo *info, struct File
 	struct APETagFooterStruct newFooter;
 	struct APETagFooterStruct newHeader;
 
-	if (saveTimeStamp)
-		fileTime(filename, storeTime);
-
 	/* For the new tag, we'll have a footer _AND_ header (whether or not a header was in the original */
 	newTagLength = sizeof(struct APETagFooterStruct) * 2;
 	newTagCount = 0;
@@ -602,9 +599,6 @@ int WriteMP3GainAPETag (char *filename, struct MP3GainTagInfo *info, struct File
 
 	fclose(outputFile);
 	
-	if (saveTimeStamp)
-		fileTime(filename,setStoredTime);
-
 	free(newFieldData);
     return 1;
 };
