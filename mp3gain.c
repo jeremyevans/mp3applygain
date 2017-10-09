@@ -107,7 +107,6 @@ unsigned char buffer[BUFFERSIZE];
 
 int writeself = 0;
 int QuietMode = 0;
-int UsingTemp = 0;
 int NowWriting = 0;
 double lastfreq = -1.0;
 
@@ -186,11 +185,6 @@ unsigned long fillBuffer(long savelastbytes) {
 		savelastbytes = 0;
 	}
 
-	if (UsingTemp && NowWriting) {
-		if (fwrite(buffer,1,inbuffer-savelastbytes,outf) != (size_t)(inbuffer-savelastbytes))
-            return 0;
-	}
-
 	if (savelastbytes != 0) /* save some of the bytes at the end of the buffer */
 		memmove((void*)buffer,(const void*)(buffer+inbuffer-savelastbytes),savelastbytes);
 	
@@ -201,10 +195,6 @@ unsigned long fillBuffer(long savelastbytes) {
         if (i != skipbuf)
             return 0;
 
-		if (UsingTemp && NowWriting) {
-			if (fwrite(buffer,1,skipbuf,outf) != skipbuf)
-            			return 0;
-		}
 		filepos += i;
         skip -= skipbuf;
 	}
@@ -231,8 +221,7 @@ void set8Bits(unsigned short val) {
 	wrdpntr[1] &= maskRight8bits[bitidx];
 	wrdpntr[1] |= (val  & 0xFF);
 	
-	if (!UsingTemp) 
-		addWriteBuff(filepos-(inbuffer-(wrdpntr-buffer)),wrdpntr);
+	addWriteBuff(filepos-(inbuffer-(wrdpntr-buffer)),wrdpntr);
 }
 
 
@@ -642,45 +631,9 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 	  
   gFilesize = getSizeOfFile(filename);
 
-  if (UsingTemp) {
-	  fflush(stderr);
-	  fflush(stdout);
- 	  outlength = (long)strlen(filename);
- 	  outfilename = (char *)malloc(outlength+5);
-	  strcpy(outfilename,filename);
- 	  if ((filename[outlength-3] == 'T' || filename[outlength-3] == 't') &&
- 			(filename[outlength-2] == 'M' || filename[outlength-2] == 'm') &&
- 			(filename[outlength-1] == 'P' || filename[outlength-1] == 'p')) {
- 		  strcat(outfilename,".TMP");
- 	  }
- 	  else {
- 		  outfilename[outlength-3] = 'T';
- 		  outfilename[outlength-2] = 'M';
- 		  outfilename[outlength-1] = 'P';
- 	  }
-
-      inf = fopen(filename,"r+b");
-
-	  if (inf != NULL) {
-	    outf = fopen(outfilename, "wb");
-		
-		if (outf == NULL) {
-		        fclose(inf); 
-			inf = NULL;
-            passError(MP3GAIN_UNSPECIFED_ERROR, 3,
-                "\nCan't open ", outfilename, " for temp writing\n");
-			return M3G_ERR_CANT_MAKE_TMP;
-		} 
- 
-	  }
-  }
-  else {
-      inf = fopen(filename,"r+b");
-  }
+  inf = fopen(filename,"r+b");
 
   if (inf == NULL) {
-	  if (UsingTemp && (outf != NULL))
-		  fclose(outf);
 	  passError( MP3GAIN_UNSPECIFED_ERROR, 3,
           "\nCan't open ", filename, " for modifying\n");
 	  return M3G_ERR_CANT_MODIFY_FILE;
@@ -809,8 +762,7 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 							else
 								crcWriteHeader(38,(char*)curframe);
 							/* WRITETOFILE */
-							if (!UsingTemp) 
-								addWriteBuff(filepos-(inbuffer-(curframe+4-buffer)),curframe+4);
+							addWriteBuff(filepos-(inbuffer-(curframe+4-buffer)),curframe+4);
 						}
 				}
 				else { /* mpegver != 3 */
@@ -846,8 +798,7 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 						else
 							crcWriteHeader(23,(char*)curframe);
 						/* WRITETOFILE */
-						if (!UsingTemp) 
-							addWriteBuff(filepos-(inbuffer-(curframe+4-buffer)),curframe+4);
+						addWriteBuff(filepos-(inbuffer-(curframe+4-buffer)),curframe+4);
 					}
 
 				}
@@ -872,48 +823,9 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 	}
 	fflush(stderr);
 	fflush(stdout);
-	if (UsingTemp) {
-		while (fillBuffer(0));
-        fflush(outf);
-		fseek(outf, 0, SEEK_END);
-		fseek(inf, 0, SEEK_END);
-		outlength=ftell(outf);
-		inlength =ftell(inf); 
-		fclose(outf);
-		fclose(inf);
-		inf = NULL;
-        
-        if (outlength != inlength) {
-            deleteFile(outfilename);
-			passError( MP3GAIN_UNSPECIFED_ERROR, 3,
-                "Not enough temp space on disk to modify ", filename, 
-                "\nEither free some space, or do not use \"temp file\" option\n");
-            return M3G_ERR_NOT_ENOUGH_TMP_SPACE;
-        }
-        else {
-
-		    if (deleteFile(filename)) {
-				deleteFile(outfilename); //try to delete tmp file
-				passError( MP3GAIN_UNSPECIFED_ERROR, 3,
-                    "Can't open ", filename, " for modifying\n");
-			    return M3G_ERR_CANT_MODIFY_FILE;
-		    }
-		    if (moveFile(outfilename, filename)) {
-				passError( MP3GAIN_UNSPECIFED_ERROR, 9,
-                    "Problem re-naming ", outfilename, " to ", filename, 
-                    "\nThe mp3 was correctly modified, but you will need to re-name ", 
-                    outfilename, " to ", filename, 
-                    " yourself.\n");
-			    return M3G_ERR_RENAME_TMP;
-		    };
-        }
-		free(outfilename);
-	}
-	else {
-		flushWriteBuff();
-		fclose(inf);
-		inf = NULL;
-	}
+	flushWriteBuff();
+	fclose(inf);
+	inf = NULL;
   }
 
   NowWriting = 0;
@@ -999,8 +911,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%cm <i> - modify suggested MP3 gain by integer i\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cd <n> - modify suggested dB gain by floating-point n\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%co - output is a database-friendly tab-delimited list\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%ct - writes modified data to temp file, then deletes original\n",SWITCH_CHAR);
-		fprintf(stderr,"\t     instead of modifying bytes in original file\n");
 		fprintf(stderr,"\t%cq - Quiet mode: no status messages\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
@@ -1183,11 +1093,6 @@ int main(int argc, char **argv) {
 				case 'R':
 					applyTrack = !0;
 					applyAlbum = 0;
-					break;
-
-				case 't':
-				case 'T':
-					UsingTemp = !0;
 					break;
 
 				case 'v':
