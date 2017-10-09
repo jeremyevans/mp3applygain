@@ -116,7 +116,6 @@ int BadLayer = 0;
 int LayerSet = 0;
 int Reckless = 0;
 int wrapGain = 0;
-int undoChanges = 0;
 
 static int useId3 = 0;
 
@@ -1139,7 +1138,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%cf - Assume input file is an MPEG 2 Layer III file\n",SWITCH_CHAR);
 		fprintf(stderr,"\t     (i.e. don't check for mis-named Layer I or Layer II files)\n");
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
-		fprintf(stderr,"\t%cu - undo changes made (based on stored tag info)\n",SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
 		fprintf(stderr,"If you specify %cr and %ca, only the second one will work\n",SWITCH_CHAR,SWITCH_CHAR);
@@ -1378,11 +1376,6 @@ int main(int argc, char **argv) {
 					UsingTemp = !0;
 					break;
 
-				case 'u':
-				case 'U':
-					undoChanges = !0;
-					break;
-
 				case 'v':
 				case 'V':
 					showVersion(argv[0]);
@@ -1420,11 +1413,7 @@ int main(int argc, char **argv) {
 
 
     if (databaseFormat) {
-		if (undoChanges) {
-			fprintf(stdout,"File\tleft global_gain change\tright global_gain change\n");
-		} else {
 			fprintf(stdout,"File\tMP3 gain\tdB gain\tMax Amplitude\tMax global_gain\tMin global_gain\n");
-		}
         fflush(stdout);
     }
 
@@ -1459,32 +1448,7 @@ int main(int argc, char **argv) {
 	  tagInfo[mainloop].recalc |= albumRecalc; 
 
 	  curfilename = argv[mainloop];
-	  if (undoChanges) {
-		  directGain = !0; /* so we don't write the tag a second time */
-		  if ((tagInfo[mainloop].haveUndo)&&(tagInfo[mainloop].undoLeft || tagInfo[mainloop].undoRight)) {
-				if ((!QuietMode)&&(!databaseFormat))
-					fprintf(stderr,"Undoing mp3gain changes (%d,%d) to %s...\n", tagInfo[mainloop].undoLeft, tagInfo[mainloop].undoRight, argv[mainloop]);
-
-				if (databaseFormat)
-					fprintf(stdout,"%s\t%d\t%d\n", argv[mainloop], tagInfo[mainloop].undoLeft, tagInfo[mainloop].undoRight);
-
-				changeGainAndTag(argv[mainloop] AACGAIN_ARG(aacH),
-				    tagInfo[mainloop].undoLeft, tagInfo[mainloop].undoRight,
-				    tagInfo + mainloop, fileTags + mainloop);
-
-		  } else {
-				if (databaseFormat) {
-					fprintf(stdout,"%s\t0\t0\n",argv[mainloop]);
-				} else if (!QuietMode) {
-					if (tagInfo[mainloop].haveUndo) {
-						fprintf(stderr,"No changes to undo in %s\n",argv[mainloop]);
-					} else {
-						fprintf(stderr,"No undo information in %s\n",argv[mainloop]);
-					}
-				}
-		  }
-	  }
-	  else if (directSingleChannelGain) {
+	  if (directSingleChannelGain) {
 		  if (!QuietMode)
 			  fprintf(stderr,"Applying gain change of %d to CHANNEL %d of %s...\n",directGainVal,whichChannel,argv[mainloop]);
 		  if (whichChannel) { /* do right channel */
