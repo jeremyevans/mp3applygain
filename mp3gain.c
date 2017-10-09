@@ -48,7 +48,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "apetag.h"
 
 #undef asWIN32DLL
 #ifdef __FreeBSD__
@@ -883,7 +882,6 @@ int main(int argc, char **argv) {
     int decodeSuccess;
     struct MP3GainTagInfo *tagInfo;
 	struct MP3GainTagInfo *curTag;
-	struct FileTagsStruct *fileTags;
 	int albumRecalc;
 
     gSuccess = 1;
@@ -1008,7 +1006,6 @@ int main(int argc, char **argv) {
     /* now stored in tagInfo---  maxgain = malloc(sizeof(unsigned char) * argc); */
     /* now stored in tagInfo---  mingain = malloc(sizeof(unsigned char) * argc); */
     tagInfo = (struct MP3GainTagInfo *)calloc(argc, sizeof(struct MP3GainTagInfo));
-	fileTags = (struct FileTagsStruct *)malloc(sizeof(struct FileTagsStruct) * argc);
 
 
     if (databaseFormat) {
@@ -1021,9 +1018,6 @@ int main(int argc, char **argv) {
     for (mainloop = fileStart; mainloop < argc; mainloop++) {
 	  fileok[mainloop] = 0;
 	  curfilename = argv[mainloop];
-      fileTags[mainloop].apeTag = NULL;
-	  fileTags[mainloop].lyrics3tag = NULL;
-	  fileTags[mainloop].id31tag = NULL;
 	  tagInfo[mainloop].dirty = 0;
 	  tagInfo[mainloop].haveAlbumGain = 0;
 	  tagInfo[mainloop].haveAlbumPeak = 0;
@@ -1421,25 +1415,7 @@ int main(int argc, char **argv) {
 	}
 	
     free(tagInfo);
-	/* now stored in tagInfo--- free(maxsample); */
-	free(fileok);
-    /* now stored in tagInfo--- free(maxgain); */
-    /* now stored in tagInfo--- free(mingain); */
-	for (mainloop = fileStart; mainloop < argc; mainloop++) {
-		if (fileTags[mainloop].apeTag) {
-			if (fileTags[mainloop].apeTag->otherFields) {
-				free(fileTags[mainloop].apeTag->otherFields);
-			}
-			free(fileTags[mainloop].apeTag);
-		}
-		if (fileTags[mainloop].lyrics3tag) {
-			free(fileTags[mainloop].lyrics3tag);
-		}
-		if (fileTags[mainloop].id31tag) {
-			free(fileTags[mainloop].id31tag);
-		}
-	}
-	free(fileTags);
+    free(fileok);
 
     fclose(stdout);
     fclose(stderr);
