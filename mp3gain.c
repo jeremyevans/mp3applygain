@@ -54,8 +54,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "mp3gain.h"
-
 #define HEADERSIZE 4
 #define CRC16_POLYNOMIAL 0x8005
 #define BUFFERSIZE 3000000
