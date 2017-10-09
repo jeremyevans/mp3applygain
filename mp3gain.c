@@ -989,10 +989,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"options:\n");
 		fprintf(stderr,"\t%cv - show version number\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cg <i>  - apply gain i without doing any analysis\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cl 0 <i> - apply gain i to channel 0 (left channel)\n",SWITCH_CHAR);
-		fprintf(stderr,"\t          without doing any analysis (ONLY works for STEREO files,\n");
-		fprintf(stderr,"\t          not Joint Stereo)\n");
-		fprintf(stderr,"\t%cl 1 <i> - apply gain i to channel 1 (right channel)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%ce - skip Album analysis, even if multiple files listed\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cr - apply Track gain automatically (all files set to equal loudness)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%ck - automatically lower Track/Album gain to not clip audio\n",SWITCH_CHAR);
@@ -1010,7 +1006,6 @@ void fullUsage(char *progname) {
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
 		fprintf(stderr,"If you specify %cr and %ca, only the second one will work\n",SWITCH_CHAR,SWITCH_CHAR);
-		fprintf(stderr,"If you do not specify %cc, the program will stop and ask before\n     applying gain change to a file that might clip\n",SWITCH_CHAR);
         fclose(stdout);
         fclose(stderr);
 		exit(0);
@@ -1061,7 +1056,6 @@ int main(int argc, char **argv) {
 	int *fileok;
 	int goAhead;
 	int directGain = 0;
-	int directSingleChannelGain = 0;
 	int directGainVal = 0;
 	int mp3GainMod = 0;
 	double dBGainMod = 0;
@@ -1120,7 +1114,6 @@ int main(int argc, char **argv) {
 				case 'g':
 				case 'G':
 					directGain = !0;
-					directSingleChannelGain = 0;
 					if (argv[i][2] != '\0') {
 						directGainVal = atoi(argv[i]+2);
 					}
@@ -1158,36 +1151,6 @@ int main(int argc, char **argv) {
                 case 'K':
                     autoClip = !0;
                     break;
-
-				case 'l':
-				case 'L':
-					directSingleChannelGain = !0;
-					directGain = 0;
-					if (argv[i][2] != '\0') {
-						whichChannel = atoi(argv[i]+2);
-						if (i+1 < argc) {
-							directGainVal = atoi(argv[i+1]);
-							i++;
-							fileStart++;
-						}			
-						else {
-							errUsage(argv[0]);
-						}
-					}
-					else {
-						if (i+2 < argc) {
-							whichChannel = atoi(argv[i+1]);
-							i++;
-							fileStart++;
-							directGainVal = atoi(argv[i+1]);
-							i++;
-							fileStart++;
-						}
-						else {
-							errUsage(argv[0]);
-						}
-					}
-					break;
 
 				case 'm':
 				case 'M':
@@ -1294,19 +1257,7 @@ int main(int argc, char **argv) {
 	  tagInfo[mainloop].recalc |= albumRecalc; 
 
 	  curfilename = argv[mainloop];
-	  if (directSingleChannelGain) {
-		  if (!QuietMode)
-			  fprintf(stderr,"Applying gain change of %d to CHANNEL %d of %s...\n",directGainVal,whichChannel,argv[mainloop]);
-		  if (whichChannel) { /* do right channel */
-			  changeGain(argv[mainloop] AACGAIN_ARG(aacH), 0, directGainVal);
-		  }
-		  else { /* do left channel */
-			  changeGain(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, 0);
-		  }
-		  if ((!QuietMode) && (gSuccess == 1))
-			  fprintf(stderr,"\ndone\n");
-	  }
-	  else if (directGain) {
+	  if (directGain) {
 		  if (!QuietMode)
 			  fprintf(stderr,"Applying gain change of %d to %s...\n",directGainVal,argv[mainloop]);
 		  changeGain(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, directGainVal);
