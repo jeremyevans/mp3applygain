@@ -49,7 +49,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include "apetag.h"
-#include "id3tag.h"
 
 #undef asWIN32DLL
 #ifdef __FreeBSD__
