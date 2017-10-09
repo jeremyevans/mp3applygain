@@ -11,8 +11,8 @@ LIBS= -lm
 
 all: mp3applygain
 
-mp3applygain: mp3gain.c
-	$(CC) $(LDFLAGS) -o mp3applygain mp3gain.c $(LIBS)
+mp3applygain: mp3applygain.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -o mp3applygain mp3applygain.c $(LIBS)
 
 install: mp3applygain
 	cp -p mp3applygain "$(INSTALL_PATH)"
