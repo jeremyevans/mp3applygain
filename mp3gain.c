@@ -45,57 +45,26 @@
  *  So have fun dissecting.
  */
 
+#include <errno.h>
+#include <err.h>
+#include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
-
-#undef asWIN32DLL
-#ifdef __FreeBSD__
-#include <sys/types.h>
-#endif /* __FreeBSD__ */
-#include <utime.h>
-
-/* time stamp preservation when using temp file */
-# include <sys/stat.h>
-# include <utime.h>
-# include <errno.h>
-#define SWITCH_CHAR '-'
-
-
-#include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 
-/* I tweaked the mpglib library just a bit to spit out the raw
- * decoded double values, instead of rounding them to 16-bit integers.
- * Hence the "mpglibDBL" directory
- */
-
-#include "mpglibDBL/interface.h"
-
-#include "gain_analysis.h"
-
-#include "mp3gain.h"  /*jzitt*/
-#include "rg_error.h" /*jzitt*/
+#include "mp3gain.h"
 
 #define HEADERSIZE 4
-
-#define CRC16_POLYNOMIAL        0x8005
-
+#define CRC16_POLYNOMIAL 0x8005
 #define BUFFERSIZE 3000000
 #define WRITEBUFFERSIZE 100000
-
-#define FULL_RECALC 1
-#define AMP_RECALC 2
-#define MIN_MAX_GAIN_RECALC 4
-
-#define AACGAIN_ARG(x)
 
 typedef struct {
 	unsigned long fileposition;
 	unsigned char val[2];
 } wbuffer;
-
-/* Yes, yes, I know I should do something about these globals */
 
 wbuffer writebuffer[WRITEBUFFERSIZE];
 
@@ -103,27 +72,16 @@ unsigned long writebuffercnt;
 
 unsigned char buffer[BUFFERSIZE];
 
-int writeself = 0;
-int QuietMode = 0;
-int NowWriting = 0;
-double lastfreq = -1.0;
-
-int whichChannel = 0;
 int BadLayer = 0;
 int LayerSet = 0;
-
-int gSuccess;
 
 long inbuffer;
 unsigned long bitidx;
 unsigned char *wrdpntr;
 unsigned char *curframe;
 
-char *curfilename;
-
-FILE *inf = NULL;
-
-FILE *outf;
+char *filename;
+FILE *inf;
 
 unsigned long filepos;
 
@@ -143,8 +101,7 @@ static const double frequency[4][4] = {
 long arrbytesinframe[16];
 
 /* instead of writing each byte change, I buffer them up */
-static
-void flushWriteBuff() {
+static void flushWriteBuff() {
 	unsigned long i;
 	for (i = 0; i < writebuffercnt; i++) {
 		fseek(inf,writebuffer[i].fileposition,SEEK_SET);
@@ -153,10 +110,7 @@ void flushWriteBuff() {
 	writebuffercnt = 0;
 };
 
-
-
-static
-void addWriteBuff(unsigned long pos, unsigned char *vals) {
+static void addWriteBuff(unsigned long pos, unsigned char *vals) {
 	if (writebuffercnt >= WRITEBUFFERSIZE) {
 		flushWriteBuff();
 		fseek(inf,filepos,SEEK_SET);
@@ -168,10 +122,8 @@ void addWriteBuff(unsigned long pos, unsigned char *vals) {
 	
 };
 
-
 /* fill the mp3 buffer */
-static
-unsigned long fillBuffer(long savelastbytes) {
+static unsigned long fillBuffer(long savelastbytes) {
 	unsigned long i;
 	unsigned long skip;
     unsigned long skipbuf;
@@ -202,16 +154,13 @@ unsigned long fillBuffer(long savelastbytes) {
 	return i;
 }
 
-
 static const unsigned char maskLeft8bits[8] = {
 	0x00, 0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xFE };
 
 static const unsigned char maskRight8bits[8] = {
 	0xFF, 0x7F, 0x3F, 0x1F, 0x0F, 0x07, 0x03, 0x01 };
 
-static
-void set8Bits(unsigned short val) {
-
+static void set8Bits(unsigned short val) {
 	val <<= (8 - bitidx);
 	wrdpntr[0] &= maskLeft8bits[bitidx];
 	wrdpntr[0] |= (val  >> 8);
@@ -221,22 +170,14 @@ void set8Bits(unsigned short val) {
 	addWriteBuff(filepos-(inbuffer-(wrdpntr-buffer)),wrdpntr);
 }
 
-
-
-static
-void skipBits(int nbits) {
+static void skipBits(int nbits) {
 
 	bitidx += nbits;
 	wrdpntr += (bitidx >> 3);
 	bitidx &= 7;
-
-	return;
 }
 
-
-
-static
-unsigned char peek8Bits() {
+static unsigned char peek8Bits() {
 	unsigned short rval;
 
 	rval = wrdpntr[0];
@@ -245,13 +186,9 @@ unsigned char peek8Bits() {
 	rval >>= (8 - bitidx);
 
 	return (rval & 0xFF);
-
 }
 
-
-
-static
-unsigned long skipID3v2() {
+static unsigned long skipID3v2() {
 /*
  *  An ID3v2 tag can be detected with the following pattern:
  *    $49 44 33 yy yy xx zz zz zz zz
@@ -282,35 +219,7 @@ unsigned long skipID3v2() {
 	return ok;
 }
 
-void passError(MMRESULT lerrnum, int numStrings, ...)
-{
-    char * errstr;
-    size_t totalStrLen = 0;
-    int i;
-    va_list marker;
-
-    va_start(marker, numStrings);
-    for (i = 0; i < numStrings; i++) {
-        totalStrLen += strlen(va_arg(marker, const char *));
-    }
-    va_end(marker);
-
-    errstr = (char *)malloc(totalStrLen + 3);
-    errstr[0] = '\0';
-
-    va_start(marker, numStrings);
-    for (i = 0; i < numStrings; i++) {
-        strcat(errstr,va_arg(marker, const char *));
-    }
-    va_end(marker);
-
-    DoError(errstr,lerrnum);
-    free(errstr);
-    errstr = NULL;
-}
-
-static
-unsigned long frameSearch(int startup) {
+static unsigned long frameSearch(int startup) {
 	unsigned long ok;
 	int done;
     static int startfreq;
@@ -349,13 +258,11 @@ unsigned long frameSearch(int startup) {
 				switch (wrdpntr[1] & 0x06) {
 					case 0x06:
 						BadLayer = !0;
-						passError(MP3GAIN_FILEFORMAT_NOTSUPPORTED, 2,
-                            curfilename, " is an MPEG Layer I file, not a layer III file\n");
+						fprintf(stderr, "%s is an MPEG Layer I file, not a layer III file\n", filename);
 						return 0;
 					case 0x04:
 						BadLayer = !0;
-						passError(MP3GAIN_FILEFORMAT_NOTSUPPORTED, 2,
-                            curfilename, " is an MPEG Layer II file, not a layer III file\n");
+						fprintf(stderr, "%s is an MPEG Layer II file, not a layer III file\n", filename);
 						return 0;
 				}
 			}
@@ -406,10 +313,7 @@ unsigned long frameSearch(int startup) {
 	return ok;
 }
 
-
-
-static
-int crcUpdate(int value, int crc)
+static int crcUpdate(int value, int crc)
 {
     int i;
     value <<= 8;
@@ -423,10 +327,7 @@ int crcUpdate(int value, int crc)
     return crc;
 }
 
-
-
-static
-void crcWriteHeader(int headerlength, char *header)
+static void crcWriteHeader(int headerlength, char *header)
 {
     int crc = 0xffff; /* (jo) init crc16 for error_protection */
     int i;
@@ -441,162 +342,61 @@ void crcWriteHeader(int headerlength, char *header)
     header[5] = crc & 255;
 }
 
-
-static
-long getSizeOfFile(char *filename)
-{
-    long size = 0;
-    FILE *file;
-
-    file = fopen(filename, "rb");
-    if (file) {    
-        fseek(file, 0, SEEK_END);
-        size = ftell(file);
-        fclose(file);
-    }
-  
-    return size;
-}
-
-
-unsigned long reportPercentWritten(unsigned long percent, unsigned long bytes)
-{
-    int ok = 1;
-
-    fprintf(stderr,"                                                \r %2lu%% of %lu bytes written\r"
-        ,percent,bytes);
-    fflush(stderr);
-
-    return ok;
-}
-
-int numFiles, totFiles;
-unsigned long reportPercentAnalyzed(unsigned long percent, unsigned long bytes)
-{
-	char fileDivFiles[21];
-    fileDivFiles[0]='\0';
-
-    if (totFiles-1)	/* if 1 file then don't show [x/n] */
-	    sprintf(fileDivFiles,"[%d/%d]",numFiles,totFiles);
-
-	fprintf(stderr,"                                           \r%s %2lu%% of %lu bytes analyzed\r"
-		,fileDivFiles,percent,bytes);
-	fflush(stderr);
-    return 1;
-}
-
-void scanFrameGain() {
-	int crcflag;
-	int mpegver;
+int main(int argc, char **argv) {
+	unsigned long ok;
 	int mode;
+	int crcflag;
+	unsigned char *Xingcheck;
+	unsigned long frame;
 	int nchan;
-	int gr, ch;
-	int gain;
+	int ch;
+	int gr;
+	unsigned char gain;
+	int bitridx;
+	int freqidx;
+	long bytesinframe;
+	int sideinfo_len;
+	int mpegver;
+	char *outfilename;
 
-	mpegver = (curframe[1] >> 3) & 0x03;
-	crcflag = curframe[1] & 0x01;
-	mode = (curframe[3] >> 6) & 0x03;
-	nchan = (mode == 3) ? 1 : 2;
+	outfilename = NULL;
+	frame = 0;
+	BadLayer = 0;
+	LayerSet = 0;
 
-	if (!crcflag)
-		wrdpntr = curframe + 6;
-	else
-		wrdpntr = curframe + 4;
+	double arg_db, db;
+	int arg_mod, gainchange;
 
-	bitidx = 0;
-
-	if (mpegver == 3) { /* 9 bit main_data_begin */
-		wrdpntr++;
-		bitidx = 1;
-
-		if (mode == 3)
-			skipBits(5); /* private bits */
-		else
-			skipBits(3); /* private bits */
-
-		skipBits(nchan * 4);  /* scfsi[ch][band] */
-		for (gr = 0; gr < 2; gr++) {
-			for (ch = 0; ch < nchan; ch++) {
-				skipBits(21);
-				gain = peek8Bits();
-				if (*minGain > gain) {
-					*minGain = gain;
-				}
-				if (*maxGain < gain) {
-					*maxGain = gain;
-				}
-				skipBits(38);
-			}
-		}
-	} else { /* mpegver != 3 */
-		wrdpntr++; /* 8 bit main_data_begin */
-
-		if (mode == 3)
-			skipBits(1);
-		else
-			skipBits(2);
-
-		/* only one granule, so no loop */
-		for (ch = 0; ch < nchan; ch++) {
-			skipBits(21);
-			gain = peek8Bits();
-			if (*minGain > gain) {
-				*minGain = gain;
-			}
-			if (*maxGain < gain) {
-				*maxGain = gain;
-			}
-			skipBits(42);
-		}
+	if(pledge("rpath stdio wpath", NULL) != 0) {
+		err(1, NULL);
 	}
-}
 
-static
-int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchange, int rightgainchange) {
-  unsigned long ok;
-  int mode;
-  int crcflag;
-  unsigned char *Xingcheck;
-  unsigned long frame;
-  int nchan;
-  int ch;
-  int gr;
-  unsigned char gain;
-  int bitridx;
-  int freqidx;
-  long bytesinframe;
-  int sideinfo_len;
-  int mpegver;
-  long gFilesize = 0;
-  char *outfilename;
-  int gainchange[2];
-  int singlechannel;
+	if (argc != 4) {
+		fprintf(stderr, "Usage: mp3applygain gain mod filename\n");
+		exit(1);
+	}
 
-  outfilename = NULL;
-  frame = 0;
-  BadLayer = 0;
-  LayerSet = 0;
+	arg_db = atof(argv[1]);
+	arg_mod = atoi(argv[2]);
+	filename = argv[3];
 
-  NowWriting = !0;
+	db = arg_db / (5.0 * log10(2.0));
 
-  if ((leftgainchange == 0) && (rightgainchange == 0))
-	  return 0;
+	if (!(fabs(db) - (double)((int)(fabs(db))) < 0.5))
+		db += (db < 0 ? -1 : 1);
+	gainchange = arg_mod + (int)(db);
 
+	if (gainchange == 0)
+		return 0;
 
-  gainchange[0] = leftgainchange;
-  gainchange[1] = rightgainchange;
-  singlechannel = !(leftgainchange == rightgainchange);
-	  
-  gFilesize = getSizeOfFile(filename);
+	inf = fopen(filename,"r+b");
+	if (inf == NULL) {
+		err(1, "%s", filename);
+	}
+	if(pledge("stdio", NULL) != 0) {
+		err(1, NULL);
+	}
 
-  inf = fopen(filename,"r+b");
-
-  if (inf == NULL) {
-	  passError( MP3GAIN_UNSPECIFED_ERROR, 3,
-          "\nCan't open ", filename, " for modifying\n");
-	  return M3G_ERR_CANT_MODIFY_FILE;
-  }
-  else {
 	writebuffercnt = 0;
 	inbuffer = 0;
 	filepos = 0;
@@ -611,8 +411,7 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 		ok = frameSearch(!0);
 		if (!ok) {
             if (!BadLayer)
-				passError( MP3GAIN_UNSPECIFED_ERROR, 3,
-                    "Can't find any valid MP3 frames in file ", filename, "\n");
+				fprintf(stderr, "Can't find any valid MP3 frames in file %s\n", filename);
 		}
 		else {
 			LayerSet = 1; /* We've found at least one valid layer 3 frame.
@@ -636,8 +435,7 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 					(Xingcheck[0] == 'I' && Xingcheck[1] == 'n' && Xingcheck[2] == 'f' && Xingcheck[3] == 'o')) {
 				bitridx = (curframe[2] >> 4) & 0x0F;
 				if (bitridx == 0) {
-					passError( MP3GAIN_FILEFORMAT_NOTSUPPORTED, 2,
-                        filename, " is free format (not currently supported)\n");
+					fprintf(stderr, "%s is free format (not currently supported)\n", filename);
 					ok = 0;
 				}
 				else {
@@ -657,16 +455,8 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 		
 		while (ok) {
 			bitridx = (curframe[2] >> 4) & 0x0F;
-			if (singlechannel) {
-				if ((curframe[3] >> 6) & 0x01) { /* if mode is NOT stereo or dual channel */
-					passError( MP3GAIN_FILEFORMAT_NOTSUPPORTED, 2,
-                        filename, ": Can't adjust single channel for mono or joint stereo\n");
-					ok = 0;
-				}
-			}
 			if (bitridx == 0) {
-				passError( MP3GAIN_FILEFORMAT_NOTSUPPORTED, 2,
-                    filename, " is free format (not currently supported)\n");
+				fprintf(stderr, "%s is free format (not currently supported)\n", filename);
 				ok = 0;
 			}
 			if (ok) {
@@ -700,12 +490,12 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 							skipBits(21);
 							gain = peek8Bits();
                                 if (gain != 0) {
-                                    if ((int)(gain) + gainchange[ch] > 255)
+                                    if ((int)(gain) + gainchange > 255)
                                         gain = 255;
-                                    else if ((int)gain + gainchange[ch] < 0)
+                                    else if ((int)gain + gainchange < 0)
                                         gain = 0;
                                     else
-                                        gain += (unsigned char)(gainchange[ch]);
+                                        gain += (unsigned char)(gainchange);
                                 }
 							set8Bits(gain);
 							skipBits(38);
@@ -732,12 +522,12 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 						skipBits(21);
 						gain = peek8Bits();
                             if (gain != 0) {
-                                if ((int)(gain) + gainchange[ch] > 255)
+                                if ((int)(gain) + gainchange > 255)
                                     gain = 255;
-                                else if ((int)gain + gainchange[ch] < 0)
+                                else if ((int)gain + gainchange < 0)
                                     gain = 0;
                                 else
-                                    gain += (unsigned char)(gainchange[ch]);
+                                    gain += (unsigned char)(gainchange);
                             }
 						set8Bits(gain);
 						skipBits(42);
@@ -752,676 +542,16 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 					}
 
 				}
-				if (!QuietMode) 
-				{
-					frame++;
-					if (frame%200 == 0) {
-                        ok = reportPercentWritten((unsigned long)(((double)(filepos-(inbuffer-(curframe+bytesinframe-buffer))) * 100.0) / gFilesize),gFilesize);
-                        if (!ok)
-                            return ok;
-					}
-				}
 				wrdpntr = curframe+bytesinframe;
 				ok = frameSearch(0);
 			}
 		}
 	}
 
-
-	if (!QuietMode) {
-		fprintf(stderr,"                                                   \r");
-	}
 	fflush(stderr);
 	fflush(stdout);
 	flushWriteBuff();
 	fclose(inf);
-	inf = NULL;
-  }
 
-  NowWriting = 0;
-
-  return 0;
+	return 0;
 }
-
-static
-void showVersion(char *progname) {
-	fprintf(stderr,"%s version %s\n",progname,MP3GAIN_VERSION);
-}
-
-static
-void errUsage(char *progname) {
-	showVersion(progname);
-	fprintf(stderr,"copyright(c) 2001-2009 by Glen Sawyer\n");
-	fprintf(stderr,"uses mpglib, which can be found at http://www.mpg123.de\n");
-	fprintf(stderr,"Usage: %s [options] <infile> [<infile 2> ...]\n",progname);
-	fprintf(stderr,"  --use %c? or %ch for a full list of options\n",SWITCH_CHAR,SWITCH_CHAR);
-    fclose(stdout);
-    fclose(stderr);
-	exit(1);
-}
-
-
-
-static
-void fullUsage(char *progname) {
-		showVersion(progname);
-		fprintf(stderr,"copyright(c) 2001-2009 by Glen Sawyer\n");
-		fprintf(stderr,"uses mpglib, which can be found at http://www.mpg123.de\n");
-		fprintf(stderr,"Usage: %s [options] <infile> [<infile 2> ...]\n",progname);
-		fprintf(stderr,"options:\n");
-		fprintf(stderr,"\t%cv - show version number\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cg <i>  - apply gain i without doing any analysis\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%ce - skip Album analysis, even if multiple files listed\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cr - apply Track gain automatically (all files set to equal loudness)\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%ck - automatically lower Track/Album gain to not clip audio\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%ca - apply Album gain automatically (files are all from the same\n",SWITCH_CHAR);
-		fprintf(stderr,"\t              album: a single gain change is applied to all files, so\n");
-		fprintf(stderr,"\t              their loudness relative to each other remains unchanged,\n");
-		fprintf(stderr,"\t              but the average album loudness is normalized)\n");
-		fprintf(stderr,"\t%cm <i> - modify suggested MP3 gain by integer i\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cd <n> - modify suggested dB gain by floating-point n\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%co - output is a database-friendly tab-delimited list\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cq - Quiet mode: no status messages\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
-		fprintf(stderr,"If you specify %cr and %ca, only the second one will work\n",SWITCH_CHAR,SWITCH_CHAR);
-        fclose(stdout);
-        fclose(stderr);
-		exit(0);
-}
-
-
-void dumpTaginfo(struct MP3GainTagInfo *info) {
-  fprintf(stderr, "haveAlbumGain       %d  albumGain %f\n",info->haveAlbumGain, info->albumGain);
-  fprintf(stderr, "haveAlbumPeak       %d  albumPeak %f\n",info->haveAlbumPeak, info->albumPeak);
-  fprintf(stderr, "haveAlbumMinMaxGain %d  min %d  max %d\n",info->haveAlbumMinMaxGain, info->albumMinGain, info->albumMaxGain);
-  fprintf(stderr, "haveTrackGain       %d  trackGain %f\n",info->haveTrackGain, info->trackGain);
-  fprintf(stderr, "haveTrackPeak       %d  trackPeak %f\n",info->haveTrackPeak, info->trackPeak);
-  fprintf(stderr, "haveMinMaxGain      %d  min %d  max %d\n",info->haveMinMaxGain, info->minGain, info->maxGain);
-}
-
-
-int main(int argc, char **argv) {
-	MPSTR mp;
-	unsigned long ok;
-	int mode;
-	int crcflag;
-	unsigned char *Xingcheck;
-	unsigned long frame;
-	int nchan;
-	int bitridx;
-	int freqidx;
-	long bytesinframe;
-	double dBchange;
-	double dblGainChange;
-	int intGainChange = 0;
-	int nprocsamp;
-	int first = 1;
-	int mainloop;
-	Float_t maxsample;
-	Float_t lsamples[1152];
-	Float_t rsamples[1152];
-    unsigned char maxgain;
-    unsigned char mingain;
-	int autoClip = 0;
-	int applyTrack = 0;
-	int applyAlbum = 0;
-	int analysisTrack = 0;
-	char analysisError = 0;
-	int fileStart;
-	int databaseFormat = 0;
-	int i;
-	int *fileok;
-	int goAhead;
-	int directGain = 0;
-	int directGainVal = 0;
-	int mp3GainMod = 0;
-	double dBGainMod = 0;
-	int mpegver;
-	int sideinfo_len;
-	long gFilesize = 0;
-    int decodeSuccess;
-    struct MP3GainTagInfo *tagInfo;
-	struct MP3GainTagInfo *curTag;
-	int albumRecalc;
-
-    gSuccess = 1;
-
-    if (argc < 2) {
-		errUsage(argv[0]);
-	}
-
-	fileStart = 1;
-	numFiles = 0;
-
-	for (i = 1; i < argc; i++) {
-		if (((argv[i][0] == '/')||(argv[i][0] == '-'))&&
-		    (strlen(argv[i])==2)) {
-			fileStart++;
-			switch(argv[i][1]) {
-				case 'a':
-				case 'A':
-					applyTrack = 0;
-					applyAlbum = !0;
-					break;
-
-				case 'd':
-				case 'D':
-					if (argv[i][2] != '\0') {
-						dBGainMod = atof(argv[i]+2);
-					}
-					else {
-						if (i+1 < argc) {
-							dBGainMod = atof(argv[i+1]);
-							i++;
-							fileStart++;
-						}
-						else {
-							errUsage(argv[0]);
-						}
-					}
-					break;
-
-				case 'g':
-				case 'G':
-					directGain = !0;
-					if (argv[i][2] != '\0') {
-						directGainVal = atoi(argv[i]+2);
-					}
-					else {
-						if (i+1 < argc) {
-							directGainVal = atoi(argv[i+1]);
-							i++;
-							fileStart++;
-						}
-						else {
-							errUsage(argv[0]);
-						}
-					}
-					break;
-
-				case 'h':
-				case 'H':
-				case '?':
-					fullUsage(argv[0]);
-					break;
-
-                case 'k':
-                case 'K':
-                    autoClip = !0;
-                    break;
-
-				case 'm':
-				case 'M':
-					if (argv[i][2] != '\0') {
-						mp3GainMod = atoi(argv[i]+2);
-					}
-					else {
-						if (i+1 < argc) {
-							mp3GainMod = atoi(argv[i+1]);
-							i++;
-							fileStart++;
-						}
-						else {
-							errUsage(argv[0]);
-						}
-					}
-					break;
-
-				case 'o':
-				case 'O':
-					databaseFormat = !0;
-					break;
-
-				case 'q':
-				case 'Q':
-					QuietMode = !0;
-					break;
-
-				case 'r':
-				case 'R':
-					applyTrack = !0;
-					applyAlbum = 0;
-					break;
-
-				case 'v':
-				case 'V':
-					showVersion(argv[0]);
-                    fclose(stdout);
-                    fclose(stderr);
-					exit(0);
-					
-				case 'e':
-				case 'E':
-					analysisTrack = !0;
-					break;
-
-				default:
-					fprintf(stderr,"I don't recognize option %s\n",argv[i]);
-			}
-		}
-	}
-
-	/* now stored in tagInfo---  maxsample = malloc(sizeof(Float_t) * argc); */
-	fileok = (int *)malloc(sizeof(int) * argc);
-    /* now stored in tagInfo---  maxgain = malloc(sizeof(unsigned char) * argc); */
-    /* now stored in tagInfo---  mingain = malloc(sizeof(unsigned char) * argc); */
-    tagInfo = (struct MP3GainTagInfo *)calloc(argc, sizeof(struct MP3GainTagInfo));
-
-
-    if (databaseFormat) {
-			fprintf(stdout,"File\tMP3 gain\tdB gain\tMax Amplitude\tMax global_gain\tMin global_gain\n");
-        fflush(stdout);
-    }
-
-	/* read all the tags first */
-    totFiles = argc - fileStart;
-    for (mainloop = fileStart; mainloop < argc; mainloop++) {
-	  fileok[mainloop] = 0;
-	  curfilename = argv[mainloop];
-	  tagInfo[mainloop].dirty = 0;
-	  tagInfo[mainloop].haveAlbumGain = 0;
-	  tagInfo[mainloop].haveAlbumPeak = 0;
-	  tagInfo[mainloop].haveTrackGain = 0;
-	  tagInfo[mainloop].haveTrackPeak = 0;
-	  tagInfo[mainloop].haveUndo = 0;
-	  tagInfo[mainloop].haveMinMaxGain = 0;
-	  tagInfo[mainloop].haveAlbumMinMaxGain = 0;
-	  tagInfo[mainloop].recalc = 0;
-
-	  
-	}
-
-	/* check if we need to actually process the file(s) */
-	albumRecalc = FULL_RECALC;
-
-    for (mainloop = fileStart; mainloop < argc; mainloop++) {
-        memset(&mp, 0, sizeof(mp));
-
-	  // if the entire Album requires some kind of recalculation, then each track needs it
-	  tagInfo[mainloop].recalc |= albumRecalc; 
-
-	  curfilename = argv[mainloop];
-	  if (directGain) {
-		  if (!QuietMode)
-			  fprintf(stderr,"Applying gain change of %d to %s...\n",directGainVal,argv[mainloop]);
-		  changeGain(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, directGainVal);
-		  if ((!QuietMode) && (gSuccess == 1))
-			  fprintf(stderr,"\ndone\n");
-	  }
-	  else {
-		  if (!databaseFormat)
-		    fprintf(stdout,"%s\n",argv[mainloop]);
-		  		  
-		  if (tagInfo[mainloop].recalc > 0) {
-			  gFilesize = getSizeOfFile(argv[mainloop]);
-
-    			  inf = fopen(argv[mainloop],"rb");
-		  }
-
-		  if ((inf == NULL)&&(tagInfo[mainloop].recalc > 0)) {
-			  fprintf(stdout, "Can't open %s for reading\n",argv[mainloop]);
-              fflush(stdout);
-		  }
-		  else {
-    			InitMP3(&mp);
-			if (tagInfo[mainloop].recalc == 0) {
-				maxsample = tagInfo[mainloop].trackPeak * 32768.0;
-				maxgain = tagInfo[mainloop].maxGain;
-				mingain = tagInfo[mainloop].minGain;
-				ok = !0;
-			} else {
-				if (!((tagInfo[mainloop].recalc & FULL_RECALC)||(tagInfo[mainloop].recalc & AMP_RECALC))) { /* only min/max rescan */
-					maxsample = tagInfo[mainloop].trackPeak * 32768.0;
-				}
-				else {
-					maxsample = 0;
-				}
-                  {
-				    BadLayer = 0;
-				    LayerSet = 0;
-				    maxgain = 0;
-				    mingain = 255;
-				    inbuffer = 0;
-				    filepos = 0;
-				    bitidx = 0;
-    				ok = fillBuffer(0);
-                }
-			}
-			if (ok) {
-				if (tagInfo[mainloop].recalc > 0) {
-					wrdpntr = buffer;
-
-					ok = skipID3v2();
-
-					ok = frameSearch(!0);
-				}
-				
-				if (!ok) {
-                    if (!BadLayer) {
-						fprintf(stdout,"Can't find any valid MP3 frames in file %s\n",argv[mainloop]);
-                        fflush(stdout);
-                    }
-				}
-				else {
-					LayerSet = 1; /* We've found at least one valid layer 3 frame.
-								   * Assume any later layer 1 or 2 frames are just
-								   * bitstream corruption
-								   */
-					fileok[mainloop] = !0;
-                        numFiles++;
-					
-					if (tagInfo[mainloop].recalc > 0) {
-						mode = (curframe[3] >> 6) & 3;
-
-						if ((curframe[1] & 0x08) == 0x08) /* MPEG 1 */
-							sideinfo_len = ((curframe[3] & 0xC0) == 0xC0) ? 4 + 17 : 4 + 32;
-						else                /* MPEG 2 */
-							sideinfo_len = ((curframe[3] & 0xC0) == 0xC0) ? 4 + 9 : 4 + 17;
-
-						if (!(curframe[1] & 0x01))
-							sideinfo_len += 2;
-
-						Xingcheck = curframe + sideinfo_len;
-						//LAME CBR files have "Info" tags, not "Xing" tags
-						if ((Xingcheck[0] == 'X' && Xingcheck[1] == 'i' && Xingcheck[2] == 'n' && Xingcheck[3] == 'g') ||
-								(Xingcheck[0] == 'I' && Xingcheck[1] == 'n' && Xingcheck[2] == 'f' && Xingcheck[3] == 'o')) {
-							bitridx = (curframe[2] >> 4) & 0x0F;
-							if (bitridx == 0) {
-								fprintf(stdout, "%s is free format (not currently supported)\n",curfilename);
-								fflush(stdout);
-								ok = 0;
-							}
-							else {
-								mpegver = (curframe[1] >> 3) & 0x03;
-								freqidx = (curframe[2] >> 2) & 0x03;
-
-								bytesinframe = arrbytesinframe[bitridx] + ((curframe[2] >> 1) & 0x01);
-
-								wrdpntr = curframe + bytesinframe;
-
-								ok = frameSearch(0);
-							}
-						}
-						
-						frame = 1;
-						
-						if (ok) {
-							mpegver = (curframe[1] >> 3) & 0x03;
-							freqidx = (curframe[2] >> 2) & 0x03;
-							
-							if (first) {
-								lastfreq = frequency[mpegver][freqidx];
-								InitGainAnalysis((long)(lastfreq * 1000.0));
-								analysisError = 0;
-								first = 0;
-							}
-							else {
-								if (frequency[mpegver][freqidx] != lastfreq) {
-									lastfreq = frequency[mpegver][freqidx];
-									ResetSampleFrequency ((long)(lastfreq * 1000.0));
-								}
-							}
-						}
-					
-						while (ok) {
-							bitridx = (curframe[2] >> 4) & 0x0F;
-							if (bitridx == 0) {
-								fprintf(stdout,"%s is free format (not currently supported)\n",curfilename);
-								fflush(stdout);
-								ok = 0;
-							}
-							else {
-								mpegver = (curframe[1] >> 3) & 0x03;
-								crcflag = curframe[1] & 0x01;
-								freqidx = (curframe[2] >> 2) & 0x03;
-
-								bytesinframe = arrbytesinframe[bitridx] + ((curframe[2] >> 1) & 0x01);
-								mode = (curframe[3] >> 6) & 0x03;
-								nchan = (mode == 3) ? 1 : 2;
-
-								if (inbuffer >= bytesinframe) {
-									lSamp = lsamples;
-									rSamp = rsamples;
-									maxSamp = &maxsample;
-									maxGain = &maxgain;
-									minGain = &mingain;
-									procSamp = 0;
-									if ((tagInfo[mainloop].recalc & AMP_RECALC) || (tagInfo[mainloop].recalc & FULL_RECALC)) {
-											decodeSuccess = decodeMP3(&mp,curframe,bytesinframe,&nprocsamp);
-									} else { /* don't need to actually decode frame, 
-												just scan for min/max gain values */
-										decodeSuccess = !MP3_OK;
-										scanFrameGain();//curframe);
-									}
-									if (decodeSuccess == MP3_OK) {
-										if ((tagInfo[mainloop].recalc & FULL_RECALC)) {
-											if (AnalyzeSamples(lsamples,rsamples,procSamp/nchan,nchan) == GAIN_ANALYSIS_ERROR) {
-												fprintf(stderr,"Error analyzing further samples (max time reached)          \n");
-												analysisError = !0;
-												ok = 0;
-											}
-										}
-									}
-								}
-
-
-								if (!analysisError) {
-									wrdpntr = curframe+bytesinframe;
-									ok = frameSearch(0);
-								}
-
-								if (!QuietMode) {
-									if ( !(++frame % 200)) {
-                                        reportPercentAnalyzed((int)(((double)(filepos-(inbuffer-(curframe+bytesinframe-buffer))) * 100.0) / gFilesize),gFilesize);
-									}
-								}
-							}
-						}
-					}
-
-					if (!QuietMode)
-					fprintf(stderr,"                                                 \r");
-
-					if (tagInfo[mainloop].recalc & FULL_RECALC) {
-						dBchange = GetTitleGain();
-					} else {
-						dBchange = tagInfo[mainloop].trackGain;
-					}
-
-					if (dBchange == GAIN_NOT_ENOUGH_SAMPLES) {
-						fprintf(stdout,"Not enough samples in %s to do analysis\n",argv[mainloop]);
-                        fflush(stdout);
-						numFiles--;
-					}
-					else {
-						/* even if skipTag is on, we'll leave this part running just to store the minpeak and maxpeak */
-						curTag = tagInfo + mainloop;
-						if ( /* if we don't already have a tagged track gain OR we have it, but it doesn't match */
-							 !curTag->haveTrackGain || 
-							 (curTag->haveTrackGain && 
-								(fabs(dBchange - curTag->trackGain) >= 0.01))
-						   ) {
-							curTag->dirty = !0;
-							curTag->haveTrackGain = 1;
-							curTag->trackGain = dBchange;
-						}
-						if (!curTag->haveMinMaxGain || /* if minGain or maxGain doesn't match tag */
-								(curTag->haveMinMaxGain && 
-									(curTag->minGain != mingain || curTag->maxGain != maxgain))) {
-							curTag->dirty = !0;
-							curTag->haveMinMaxGain = !0;
-							curTag->minGain = mingain;
-							curTag->maxGain = maxgain;
-						}
-						
-						if (!curTag->haveTrackPeak ||
-								(curTag->haveTrackPeak &&
-									(fabs(maxsample - (curTag->trackPeak) * 32768.0) >= 3.3))) {
-							curTag->dirty = !0;
-							curTag->haveTrackPeak = !0;
-							curTag->trackPeak = maxsample / 32768.0;
-						}
-						/* the TAG version of the suggested Track Gain should ALWAYS be based on the 89dB standard.
-						   So we don't modify the suggested gain change until this point */
-
-						dBchange += dBGainMod;
-
-						dblGainChange = dBchange / (5.0 * log10(2.0));
-
-						if (fabs(dblGainChange) - (double)((int)(fabs(dblGainChange))) < 0.5)
-							intGainChange = (int)(dblGainChange);
-						else
-							intGainChange = (int)(dblGainChange) + (dblGainChange < 0 ? -1 : 1);
-						intGainChange += mp3GainMod;
-
-						if (databaseFormat) {
-							fprintf(stdout,"%s\t%d\t%f\t%f\t%d\t%d\n",argv[mainloop],intGainChange,dBchange,maxsample,maxgain,mingain);
-							fflush(stdout);
-						}
-						if ((!applyTrack)&&(!applyAlbum)) {
-							if (!databaseFormat) {
-								fprintf(stdout,"Recommended \"Track\" dB change: %f\n",dBchange);
-								fprintf(stdout,"Recommended \"Track\" mp3 gain change: %d\n",intGainChange);
-								if (maxsample * (Float_t)(pow(2.0,(double)(intGainChange)/4.0)) > 32767.0) {
-									fprintf(stdout,"WARNING: some clipping may occur with this gain change!\n");
-								}
-								fprintf(stdout,"Max PCM sample at current gain: %f\n",maxsample);
-                                fprintf(stdout,"Max mp3 global gain field: %d\n",maxgain);
-                                fprintf(stdout,"Min mp3 global gain field: %d\n",mingain);
-								fprintf(stdout,"\n");
-							}
-						}
-						else if (applyTrack) {
-							first = !0; /* don't keep track of Album gain */
-							if (inf)
-								fclose(inf);
-							inf = NULL;
-							goAhead = !0;
-							
-							if (intGainChange == 0) {
-								fprintf(stdout,"No changes to %s are necessary\n",argv[mainloop]);
-							}
-							else {
-                                if (autoClip) {
-                                    int intMaxNoClipGain = (int)(floor(4.0 * log10(32767.0 / maxsample) / log10(2.0)));
-                                    if (intGainChange > intMaxNoClipGain) {
-                                        fprintf(stdout,"Applying auto-clipped mp3 gain change of %d to %s\n(Original suggested gain was %d)\n",intMaxNoClipGain,argv[mainloop],intGainChange);
-                                        intGainChange = intMaxNoClipGain;
-                                    }
-                                }
-				fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
-                                changeGain(argv[mainloop] AACGAIN_ARG(aacH), intGainChange, intGainChange);
-							}
-						}
-					}
-				}
-			}
-			
-    			ExitMP3(&mp);
-			fflush(stderr);
-			fflush(stdout);
-			if (inf)
-			  fclose(inf);
-			inf = NULL;			
-		  } 
-	  }
-	}
-
-	if ((numFiles > 0)&&(!applyTrack)&&(!analysisTrack)) {
-		if (albumRecalc & FULL_RECALC) {
-			dBchange = GetAlbumGain();
-		} else {
-			/* the following if-else is for the weird case where someone applies "Album" gain to
-			   a single file, but the file doesn't actually have an Album field */
-			if (tagInfo[fileStart].haveAlbumGain)
-				dBchange = tagInfo[fileStart].albumGain;
-			else
-				dBchange = tagInfo[fileStart].trackGain;
-		}
-
-		if (dBchange == GAIN_NOT_ENOUGH_SAMPLES) {
-			fprintf(stdout,"Not enough samples in mp3 files to do analysis\n");
-            fflush(stdout);
-		}
-		else {
-			Float_t maxmaxsample;
-            unsigned char maxmaxgain;
-            unsigned char minmingain;
-			maxmaxsample = 0;
-            maxmaxgain = 0;
-            minmingain = 255;
-			for (mainloop = fileStart; mainloop < argc; mainloop++) {
-                if (fileok[mainloop]) {
-					if (tagInfo[mainloop].trackPeak > maxmaxsample)
-						maxmaxsample = tagInfo[mainloop].trackPeak;
-                    if (tagInfo[mainloop].maxGain > maxmaxgain)
-                        maxmaxgain = tagInfo[mainloop].maxGain;
-                    if (tagInfo[mainloop].minGain < minmingain)
-                        minmingain = tagInfo[mainloop].minGain;
-                }
-			}
-
-			/* the TAG version of the suggested Album Gain should ALWAYS be based on the 89dB standard.
-			   So we don't modify the suggested gain change until this point */
-
-			dBchange += dBGainMod;
-
-			dblGainChange = dBchange / (5.0 * log10(2.0));
-			if (fabs(dblGainChange) - (double)((int)(fabs(dblGainChange))) < 0.5)
-				intGainChange = (int)(dblGainChange);
-			else
-				intGainChange = (int)(dblGainChange) + (dblGainChange < 0 ? -1 : 1);
-			intGainChange += mp3GainMod;
-
-
-			if (databaseFormat) {
-				fprintf(stdout,"\"Album\"\t%d\t%f\t%f\t%d\t%d\n",intGainChange,dBchange,maxmaxsample * 32768.0 ,maxmaxgain,minmingain);
-				fflush(stdout);
-			}
-
-			if (!applyAlbum) {
-				if (!databaseFormat) {
-					fprintf(stdout,"\nRecommended \"Album\" dB change for all files: %f\n",dBchange);
-					fprintf(stdout,"Recommended \"Album\" mp3 gain change for all files: %d\n",intGainChange);
-					for (mainloop = fileStart; mainloop < argc; mainloop++) {
-						if (fileok[mainloop])
-							if (tagInfo[mainloop].trackPeak * (Float_t)(pow(2.0,(double)(intGainChange)/4.0)) > 1.0) {
-								fprintf(stdout,"WARNING: with this global gain change, some clipping may occur in file %s\n",argv[mainloop]);
-							}
-					}
-				}
-			}
-			else {
-/*MAA*/			if (autoClip) {
-/*MAA*/				int intMaxNoClipGain = (int)(floor(-4.0 * log10(maxmaxsample) / log10(2.0)));
-/*MAA*/				if (intGainChange > intMaxNoClipGain) {
-/*MAA*/					fprintf(stdout,"Applying auto-clipped mp3 gain change of %d to album\n(Original suggested gain was %d)\n",intMaxNoClipGain,intGainChange);
-/*MAA*/					intGainChange = intMaxNoClipGain;
-/*MAA*/				}
-/*MAA*/			}
-				for (mainloop = fileStart; mainloop < argc; mainloop++) {
-					if (fileok[mainloop]) {
-						if (intGainChange == 0) {
-							fprintf(stdout,"\nNo changes to %s are necessary\n",argv[mainloop]);
-						}
-						else {
-							fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
-							changeGain(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), intGainChange, intGainChange);
-						}
-					}
-				}
-			}
-		}
-	}
-	
-    free(tagInfo);
-    free(fileok);
-
-    fclose(stdout);
-    fclose(stderr);
-	if (gSuccess)
-		return 0;
-	else
-		return 1;
-}
-
