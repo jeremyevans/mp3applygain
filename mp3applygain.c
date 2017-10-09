@@ -1,9 +1,8 @@
 /*
- *  mp3gain.c - analyzes mp3 files, determines the perceived volume, 
- *      and adjusts the volume of the mp3 accordingly
+ *  mp3applygain.c - adjusts the volume of an mp3 file by applying gain
  *
  *  Copyright (C) 2001-2009 Glen Sawyer
- *  AAC support (C) 2004-2009 David Lasker, Altos Design, Inc.
+ *  Copyright (C) 2017 Jeremy Evans
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -31,18 +30,6 @@
  *  DLL-ification by John Zitterkopf (zitt@hotmail.com)
  *
  *  Additional tweaks by Artur Polaczynski, Mark Armbrust, and others
- */
-
-
-/*
- *  General warning: I coded this in several stages over the course of several
- *  months. During that time, I changed my mind about my coding style and
- *  naming conventions many, many times. So there's not a lot of consistency
- *  in the code. Sorry about that. I may clean it up some day, but by the time
- *  I would be getting around to it, I'm sure that the more clever programmers
- *  out there will have come up with superior versions already...
- *
- *  So have fun dissecting.
  */
 
 #include <errno.h>
