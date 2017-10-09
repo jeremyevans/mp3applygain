@@ -33,6 +33,10 @@ you can rerun it with the gain and mod both multiplied by -1
 to reverse it.  Do not run this program on original mp3s, only
 on copies that are safe to modify.
 
+mp3applygain currently calls pledge(2) unconditionally, so it
+only works on OpenBSD.  Patches to add support for other
+operating systems will be considered.
+
 History
 -------
 
