@@ -118,7 +118,6 @@ int Reckless = 0;
 int wrapGain = 0;
 int undoChanges = 0;
 
-int skipTag = 0;
 int deleteTag = 0;
 int forceRecalculateTag = 0;
 int checkTagOnly = 0;
@@ -1145,7 +1144,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
 		fprintf(stderr,"\t%cs c - only check stored tag info (no other processing)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs d - delete stored tag info (no other processing)\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cs s - skip (ignore) stored tag info (do not read or write tags)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs r - force re-calculation (do not read tag info)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs i - use ID3v2 tag for MP3 gain info\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cs a - use APE tag for MP3 gain info (default)\n",SWITCH_CHAR);
@@ -1406,10 +1404,6 @@ int main(int argc, char **argv) {
                         case 'D':
                             deleteTag = !0;
                             break;
-                        case 's':
-                        case 'S':
-                            skipTag = !0;
-                            break;
                         case 'r':
                         case 'R':
                             forceRecalculateTag = !0;
@@ -1504,101 +1498,10 @@ int main(int argc, char **argv) {
 	  tagInfo[mainloop].recalc = 0;
 
 	  
-      if ((!skipTag)&&(!deleteTag)) {
-		{
-			ReadMP3GainAPETag(curfilename,&(tagInfo[mainloop]),&(fileTags[mainloop]));
-			if (useId3) {
-				if (tagInfo[mainloop].haveTrackGain || tagInfo[mainloop].haveAlbumGain ||
-				    tagInfo[mainloop].haveMinMaxGain || tagInfo[mainloop].haveAlbumMinMaxGain ||
-				    tagInfo[mainloop].haveUndo) {
-					/* Mark the file dirty to force upgrade to ID3v2 */
-					tagInfo[mainloop].dirty = 1;
-				}
-				ReadMP3GainID3Tag(curfilename,&(tagInfo[mainloop]));
-			}
-		}
-          /*fprintf(stdout,"Read previous tags from %s\n",curfilename);
-            dumpTaginfo(&(tagInfo[mainloop]));*/
-		  if (forceRecalculateTag) {
-			  if (tagInfo[mainloop].haveAlbumGain) {
-				  tagInfo[mainloop].dirty = !0;
-				  tagInfo[mainloop].haveAlbumGain = 0;
-			  }
-			  if (tagInfo[mainloop].haveAlbumPeak) {
-				  tagInfo[mainloop].dirty = !0;
-				  tagInfo[mainloop].haveAlbumPeak = 0;
-			  }
-			  if (tagInfo[mainloop].haveTrackGain) {
-				  tagInfo[mainloop].dirty = !0;
-				  tagInfo[mainloop].haveTrackGain = 0;
-			  }
-			  if (tagInfo[mainloop].haveTrackPeak) {
-				  tagInfo[mainloop].dirty = !0;
-				  tagInfo[mainloop].haveTrackPeak = 0;
-			  }
-/* NOT Undo information! 
-			  if (tagInfo[mainloop].haveUndo) {
-				  tagInfo[mainloop].dirty = !0;
-				  tagInfo[mainloop].haveUndo = 0;
-			  }
-*/
-			  if (tagInfo[mainloop].haveMinMaxGain) {
-				  tagInfo[mainloop].dirty = !0;
-				  tagInfo[mainloop].haveMinMaxGain = 0;
-			  }
-			  if (tagInfo[mainloop].haveAlbumMinMaxGain) {
-				  tagInfo[mainloop].dirty = !0;
-				  tagInfo[mainloop].haveAlbumMinMaxGain = 0;
-			  }
-		  }
-	  }
 	}
 
 	/* check if we need to actually process the file(s) */
-	albumRecalc = forceRecalculateTag || skipTag ? FULL_RECALC : 0;
-	if ((!skipTag)&&(!deleteTag)&&(!forceRecalculateTag)) {
-		/* we're not automatically recalculating, so check if we already have all the information */
-		if (argc - fileStart > 1) {
-			curAlbumGain = tagInfo[fileStart].albumGain;
-			curAlbumPeak = tagInfo[fileStart].albumPeak;
-			curAlbumMinGain = tagInfo[fileStart].albumMinGain;
-			curAlbumMaxGain = tagInfo[fileStart].albumMaxGain;
-		}
-		for (mainloop = fileStart; mainloop < argc; mainloop++) {
-			if (!maxAmpOnly) { /* we don't care about these things if we're only looking for max amp */
-				if (argc - fileStart > 1 && !applyTrack && !analysisTrack) { /* only check album stuff if more than one file in the list */
-					if (!tagInfo[mainloop].haveAlbumGain) {
-						albumRecalc |= FULL_RECALC;
-					} else if (tagInfo[mainloop].albumGain != curAlbumGain) {
-						albumRecalc |= FULL_RECALC;
-					}
-				}
-				if (!tagInfo[mainloop].haveTrackGain) {
-					tagInfo[mainloop].recalc |= FULL_RECALC;
-				}
-			}
-			if (argc - fileStart > 1 && !applyTrack && !analysisTrack) { /* only check album stuff if more than one file in the list */
-				if (!tagInfo[mainloop].haveAlbumPeak) {
-					albumRecalc |= AMP_RECALC;
-				} else if (tagInfo[mainloop].albumPeak != curAlbumPeak) {
-					albumRecalc |= AMP_RECALC;
-				}
-				if (!tagInfo[mainloop].haveAlbumMinMaxGain) {
-					albumRecalc |= MIN_MAX_GAIN_RECALC;
-				} else if (tagInfo[mainloop].albumMaxGain != curAlbumMaxGain) {
-					albumRecalc |= MIN_MAX_GAIN_RECALC;
-				} else if (tagInfo[mainloop].albumMinGain != curAlbumMinGain) {
-					albumRecalc |= MIN_MAX_GAIN_RECALC;
-				}
-			}
-			if (!tagInfo[mainloop].haveTrackPeak) {
-				tagInfo[mainloop].recalc |= AMP_RECALC;
-			}
-			if (!tagInfo[mainloop].haveMinMaxGain) {
-				tagInfo[mainloop].recalc |= MIN_MAX_GAIN_RECALC;
-			}
-		}
-	}
+	albumRecalc = FULL_RECALC;
 
     for (mainloop = fileStart; mainloop < argc; mainloop++) {
         memset(&mp, 0, sizeof(mp));
@@ -1727,18 +1630,10 @@ int main(int argc, char **argv) {
 		  if (!QuietMode)
 			  fprintf(stderr,"Applying gain change of %d to CHANNEL %d of %s...\n",directGainVal,whichChannel,argv[mainloop]);
 		  if (whichChannel) { /* do right channel */
-			  if (skipTag) {
-				  changeGain(argv[mainloop] AACGAIN_ARG(aacH), 0, directGainVal);
-			  } else {
-				  changeGainAndTag(argv[mainloop] AACGAIN_ARG(aacH), 0, directGainVal, tagInfo + mainloop, fileTags + mainloop);
-			  }
+			  changeGain(argv[mainloop] AACGAIN_ARG(aacH), 0, directGainVal);
 		  }
 		  else { /* do left channel */
-			  if (skipTag) {
-				  changeGain(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, 0);
-			  } else {
-				changeGainAndTag(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, 0, tagInfo + mainloop, fileTags + mainloop);
-			  }
+			  changeGain(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, 0);
 		  }
 		  if ((!QuietMode) && (gSuccess == 1))
 			  fprintf(stderr,"\ndone\n");
@@ -1746,12 +1641,7 @@ int main(int argc, char **argv) {
 	  else if (directGain) {
 		  if (!QuietMode)
 			  fprintf(stderr,"Applying gain change of %d to %s...\n",directGainVal,argv[mainloop]);
-		  if (skipTag) {
-			  changeGain(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, directGainVal);
-		  } else {
-			  changeGainAndTag(argv[mainloop] AACGAIN_ARG(aacH),
-                  directGainVal,directGainVal, tagInfo + mainloop, fileTags + mainloop);
-		  }
+		  changeGain(argv[mainloop] AACGAIN_ARG(aacH), directGainVal, directGainVal);
 		  if ((!QuietMode) && (gSuccess == 1))
 			  fprintf(stderr,"\ndone\n");
 	  }
@@ -2029,10 +1919,6 @@ int main(int argc, char **argv) {
 							
 							if (intGainChange == 0) {
 								fprintf(stdout,"No changes to %s are necessary\n",argv[mainloop]);
-								if (!skipTag && tagInfo[mainloop].dirty) {
-									fprintf(stdout,"...but tag needs update: Writing tag information for %s\n",argv[mainloop]);
-									WriteMP3GainTag(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), tagInfo + mainloop, fileTags + mainloop, saveTime);
-								}
 							}
 							else {
                                 if (autoClip) {
@@ -2052,16 +1938,8 @@ int main(int argc, char **argv) {
                                 }
                                 if (goAhead) {
 									fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
-                                    if (skipTag) {
 	                                    changeGain(argv[mainloop] AACGAIN_ARG(aacH), intGainChange, intGainChange);
-                                    } else {
-	                                    changeGainAndTag(argv[mainloop] AACGAIN_ARG(aacH),
-                                            intGainChange,intGainChange, tagInfo + mainloop, fileTags + mainloop);
-                                    }
-                                } else if (!skipTag && tagInfo[mainloop].dirty) {
-									fprintf(stdout,"Writing tag information for %s\n",argv[mainloop]);
-    								WriteMP3GainTag(argv[mainloop] AACGAIN_ARG(aacH), tagInfo + mainloop, fileTags + mainloop, saveTime);
-								}
+                                } 
 							}
 						}
 					}
@@ -2115,40 +1993,6 @@ int main(int argc, char **argv) {
                 }
 			}
 
-			if ((!skipTag)&&(numFiles > 1 || applyAlbum)) {
-				for (mainloop = fileStart; mainloop < argc; mainloop++) {
-					curTag = tagInfo + mainloop;
-					if (!maxAmpOnly) {
-						if ( /* if we don't already have a tagged track gain OR we have it, but it doesn't match */
-							 !curTag->haveAlbumGain || 
-							 (curTag->haveAlbumGain && 
-								(fabs(dBchange - curTag->albumGain) >= 0.01))
-						   ){
-							curTag->dirty = !0;
-							curTag->haveAlbumGain = 1;
-							curTag->albumGain = dBchange;
-						}
-					}
-					
-					if (!curTag->haveAlbumMinMaxGain || /* if albumMinGain or albumMaxGain doesn't match tag */
-							(curTag->haveAlbumMinMaxGain && 
-								(curTag->albumMinGain != minmingain || curTag->albumMaxGain != maxmaxgain))) {
-						curTag->dirty = !0;
-						curTag->haveAlbumMinMaxGain = !0;
-						curTag->albumMinGain = minmingain;
-						curTag->albumMaxGain = maxmaxgain;
-					}
-					
-					if (!curTag->haveAlbumPeak ||
-							(curTag->haveAlbumPeak &&
-								(fabs(maxmaxsample - curTag->albumPeak) >= 0.0001))) {
-						curTag->dirty = !0;
-						curTag->haveAlbumPeak = !0;
-						curTag->albumPeak = maxmaxsample;
-					}
-				}
-			}
-
 			/* the TAG version of the suggested Album Gain should ALWAYS be based on the 89dB standard.
 			   So we don't modify the suggested gain change until this point */
 
@@ -2192,10 +2036,6 @@ int main(int argc, char **argv) {
 						goAhead = !0;
 						if (intGainChange == 0) {
 							fprintf(stdout,"\nNo changes to %s are necessary\n",argv[mainloop]);
-							if (!skipTag && tagInfo[mainloop].dirty) {
-								fprintf(stdout,"...but tag needs update: Writing tag information for %s\n",argv[mainloop]);
-    							WriteMP3GainTag(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), tagInfo + mainloop, fileTags + mainloop, saveTime);
-							}
 						}
 						else {
 							if (!ignoreClipWarning) {
@@ -2204,15 +2044,8 @@ int main(int argc, char **argv) {
 							}
 							if (goAhead) {
 								fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
-								if (skipTag) {
 									changeGain(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), intGainChange, intGainChange);
-								} else {
-									changeGainAndTag(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), intGainChange, intGainChange, tagInfo + mainloop, fileTags + mainloop);
-								}
-							} else if (!skipTag && tagInfo[mainloop].dirty) {
-								fprintf(stdout,"Writing tag information for %s\n",argv[mainloop]);
-    							WriteMP3GainTag(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), tagInfo + mainloop, fileTags + mainloop, saveTime);
-							}
+							} 
 						}
 					}
 				}
@@ -2220,24 +2053,6 @@ int main(int argc, char **argv) {
 		}
 	}
 	
-	/* update file tags */
-	if ((!applyTrack)&&
-        (!applyAlbum)&&
-        (!directGain)&&
-        (!directSingleChannelGain)&&
-        (!deleteTag)&&
-        (!skipTag)&&
-        (!checkTagOnly)) { 
-		/* if we made changes, we already updated the tags */
-		for (mainloop = fileStart; mainloop < argc; mainloop++) {
-			if (fileok[mainloop]) {
-				if (tagInfo[mainloop].dirty) {
-					WriteMP3GainTag(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), tagInfo + mainloop, fileTags + mainloop, saveTime);
-				}
-			}
-		}
-	}
-
     free(tagInfo);
 	/* now stored in tagInfo--- free(maxsample); */
 	free(fileok);
