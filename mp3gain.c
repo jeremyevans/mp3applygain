@@ -117,8 +117,6 @@ int LayerSet = 0;
 int Reckless = 0;
 int wrapGain = 0;
 
-static int useId3 = 0;
-
 int gSuccess;
 
 long inbuffer;
@@ -933,120 +931,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
   return 0;
 }
 
-
-
-
-
-static
-void WriteMP3GainTag(char *filename AACGAIN_ARG(AACGainHandle aacH), struct MP3GainTagInfo *info, struct FileTagsStruct *fileTags, int saveTimeStamp)
-{
-	if (useId3) {
-		/* Write ID3 tag; remove stale APE tag if it exists. */
-		if (WriteMP3GainID3Tag(filename, info, saveTimeStamp) >= 0)
-			RemoveMP3GainAPETag(filename, saveTimeStamp);
-	} else {
-		/* Write APE tag */
-		WriteMP3GainAPETag(filename, info, fileTags, saveTimeStamp);
-	}
-}
-
-
-void changeGainAndTag(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchange, int rightgainchange, struct MP3GainTagInfo *tag, struct FileTagsStruct *fileTag) {
-	double dblGainChange;
-	int curMin;
-	int curMax;
-
-	if (leftgainchange != 0 || rightgainchange != 0) {
-		if (!changeGain(filename AACGAIN_ARG(aacH), leftgainchange, rightgainchange)) {
-			if (!tag->haveUndo) {
-				tag->undoLeft = 0;
-				tag->undoRight = 0;
-			}
-			tag->dirty = !0;
-			tag->undoRight -= rightgainchange;
-			tag->undoLeft -= leftgainchange;
-			tag->undoWrap = wrapGain;
-
-			/* if undo == 0, then remove Undo tag */
-			tag->haveUndo = !0;
-	/* on second thought, don't remove it. Shortening the tag causes full file copy, which is slow so we avoid it if we can
-			tag->haveUndo = 
-				((tag->undoRight != 0) || 
-				 (tag->undoLeft != 0));
-	*/
-
-			if (leftgainchange == rightgainchange) { /* don't screw around with other fields if mis-matched left/right */
-				dblGainChange = leftgainchange * 1.505; /* approx. 5 * log10(2) */
-				if (tag->haveTrackGain) {
-					tag->trackGain -= dblGainChange;
-				}
-				if (tag->haveTrackPeak) {
-					tag->trackPeak *= pow(2.0,(double)(leftgainchange)/4.0);
-				}
-				if (tag->haveAlbumGain) {
-					tag->albumGain -= dblGainChange;
-				}
-				if (tag->haveAlbumPeak) {
-					tag->albumPeak *= pow(2.0,(double)(leftgainchange)/4.0);
-				}
-				if (tag->haveMinMaxGain) {
-					curMin = tag->minGain;
-					curMax = tag->maxGain;
-					curMin += leftgainchange;
-					curMax += leftgainchange;
-					if (wrapGain) {
-						if (curMin < 0 || curMin > 255 || curMax < 0 || curMax > 255) {
-							/* we've lost the "real" min or max because of wrapping */
-							tag->haveMinMaxGain = 0;
-						}
-					} else {
-						tag->minGain = tag->minGain == 0 ? 0 : curMin < 0 ? 0 : curMin > 255 ? 255 : curMin;
-						tag->maxGain = curMax < 0 ? 0 : curMax > 255 ? 255 : curMax;
-					}
-				}
-				if (tag->haveAlbumMinMaxGain) {
-					curMin = tag->albumMinGain;
-					curMax = tag->albumMaxGain;
-					curMin += leftgainchange;
-					curMax += leftgainchange;
-					if (wrapGain) {
-						if (curMin < 0 || curMin > 255 || curMax < 0 || curMax > 255) {
-							/* we've lost the "real" min or max because of wrapping */
-							tag->haveAlbumMinMaxGain = 0;
-						}
-					} else {
-						tag->albumMinGain = tag->albumMinGain == 0 ? 0 : curMin < 0 ? 0 : curMin > 255 ? 255 : curMin;
-						tag->albumMaxGain = curMax < 0 ? 0 : curMax > 255 ? 255 : curMax;
-					}
-				}
-			} // if (leftgainchange == rightgainchange ...
-			WriteMP3GainTag(filename AACGAIN_ARG(aacH), tag, fileTag, saveTime);
-		} // if (!changeGain(filename ...
-	}// if (leftgainchange !=0 ...
-
-}
-
-static 
-int queryUserForClipping(char * argv_mainloop,int intGainChange)
-{
-	char ch;
-
-	fprintf(stderr,"\nWARNING: %s may clip with mp3 gain change %d\n",argv_mainloop,intGainChange);
-	ch = 0;
-	fflush(stdout);
-	fflush(stderr);
-	while ((ch != 'Y') && (ch != 'N')) {
-		fprintf(stderr,"Make change? [y/n]:");
-		fflush(stderr);
-		ch = getchar();
-		ch = toupper(ch);
-	}
-	if (ch == 'N')
-		return 0;
-
-	return 1;
-}
-
 static
 void showVersion(char *progname) {
 	fprintf(stderr,"%s version %s\n",progname,MP3GAIN_VERSION);
@@ -1128,7 +1012,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t              but the average album loudness is normalized)\n");
 		fprintf(stderr,"\t%cm <i> - modify suggested MP3 gain by integer i\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cd <n> - modify suggested dB gain by floating-point n\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cc - ignore clipping warning when applying gain\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%co - output is a database-friendly tab-delimited list\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%ct - writes modified data to temp file, then deletes original\n",SWITCH_CHAR);
 		fprintf(stderr,"\t     instead of modifying bytes in original file\n");
@@ -1181,7 +1064,6 @@ int main(int argc, char **argv) {
 	Float_t rsamples[1152];
     unsigned char maxgain;
     unsigned char mingain;
-	int ignoreClipWarning = 0;
 	int autoClip = 0;
 	int applyTrack = 0;
 	int applyAlbum = 0;
@@ -1232,11 +1114,6 @@ int main(int argc, char **argv) {
 				case 'A':
 					applyTrack = 0;
 					applyAlbum = !0;
-					break;
-
-                case 'c':
-				case 'C':
-					ignoreClipWarning = !0;
 					break;
 
 				case 'd':
@@ -1737,19 +1614,9 @@ int main(int argc, char **argv) {
                                         fprintf(stdout,"Applying auto-clipped mp3 gain change of %d to %s\n(Original suggested gain was %d)\n",intMaxNoClipGain,argv[mainloop],intGainChange);
                                         intGainChange = intMaxNoClipGain;
                                     }
-                                } else if (!ignoreClipWarning) {
-                                    if (maxsample * (Float_t)(pow(2.0,(double)(intGainChange)/4.0)) > 32767.0) {
-                                        if (queryUserForClipping(argv[mainloop],intGainChange)) {
-    									    fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
-                                        } else {
-                                            goAhead = 0;
-                                        }
-                                    }
                                 }
-                                if (goAhead) {
-									fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
-	                                    changeGain(argv[mainloop] AACGAIN_ARG(aacH), intGainChange, intGainChange);
-                                } 
+				fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
+                                changeGain(argv[mainloop] AACGAIN_ARG(aacH), intGainChange, intGainChange);
 							}
 						}
 					}
@@ -1843,19 +1710,12 @@ int main(int argc, char **argv) {
 /*MAA*/			}
 				for (mainloop = fileStart; mainloop < argc; mainloop++) {
 					if (fileok[mainloop]) {
-						goAhead = !0;
 						if (intGainChange == 0) {
 							fprintf(stdout,"\nNo changes to %s are necessary\n",argv[mainloop]);
 						}
 						else {
-							if (!ignoreClipWarning) {
-								if (tagInfo[mainloop].trackPeak * (Float_t)(pow(2.0,(double)(intGainChange)/4.0)) > 1.0) 
-									goAhead = queryUserForClipping(argv[mainloop],intGainChange);
-							}
-							if (goAhead) {
-								fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
-									changeGain(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), intGainChange, intGainChange);
-							} 
+							fprintf(stdout,"Applying mp3 gain change of %d to %s...\n",intGainChange,argv[mainloop]);
+							changeGain(argv[mainloop] AACGAIN_ARG(aacInfo[mainloop]), intGainChange, intGainChange);
 						}
 					}
 				}
