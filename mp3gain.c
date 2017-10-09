@@ -113,7 +113,6 @@ double lastfreq = -1.0;
 int whichChannel = 0;
 int BadLayer = 0;
 int LayerSet = 0;
-int wrapGain = 0;
 
 int gSuccess;
 
@@ -740,9 +739,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 						for (ch = 0; ch < nchan; ch++) {
 							skipBits(21);
 							gain = peek8Bits();
-							if (wrapGain)
-                                gain += (unsigned char)(gainchange[ch]);
-                            else {
                                 if (gain != 0) {
                                     if ((int)(gain) + gainchange[ch] > 255)
                                         gain = 255;
@@ -751,7 +747,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
                                     else
                                         gain += (unsigned char)(gainchange[ch]);
                                 }
-                            }
 							set8Bits(gain);
 							skipBits(38);
 						}
@@ -776,9 +771,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
 					for (ch = 0; ch < nchan; ch++) {
 						skipBits(21);
 						gain = peek8Bits();
-						if (wrapGain)
-                            gain += (unsigned char)(gainchange[ch]);
-                        else {
                             if (gain != 0) {
                                 if ((int)(gain) + gainchange[ch] > 255)
                                     gain = 255;
@@ -787,7 +779,6 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
                                 else
                                     gain += (unsigned char)(gainchange[ch]);
                             }
-                        }
 						set8Bits(gain);
 						skipBits(42);
 					}
@@ -837,46 +828,6 @@ void showVersion(char *progname) {
 	fprintf(stderr,"%s version %s\n",progname,MP3GAIN_VERSION);
 }
 
-
-static
-void wrapExplanation() {
-	fprintf(stderr,"Here's the problem:\n");
-	fprintf(stderr,"The \"global gain\" field that mp3gain adjusts is an 8-bit unsigned integer, so\n");
-    fprintf(stderr,"the possible values are 0 to 255.\n");
-    fprintf(stderr,"\n");
-    fprintf(stderr,"MOST mp3 files (in fact, ALL the mp3 files I've examined so far) don't go\n");
-    fprintf(stderr,"over 230. So there's plenty of headroom on top-- you can increase the gain\n");
-    fprintf(stderr,"by 37dB (multiplying the amplitude by 76) without a problem.\n");
-    fprintf(stderr,"\n");
-    fprintf(stderr,"The problem is at the bottom of the range. Some encoders create frames with\n");
-    fprintf(stderr,"0 as the global gain for silent frames.\n");
-    fprintf(stderr,"What happens when you _lower_ the global gain by 1?\n");
-    fprintf(stderr,"Well, in the past, mp3gain always simply wrapped the result up to 255.\n");
-    fprintf(stderr,"That way, if you lowered the gain by any amount and then raised it by the\n");
-    fprintf(stderr,"same amount, the mp3 would always be _exactly_ the same.\n");
-    fprintf(stderr,"\n");
-    fprintf(stderr,"There are a few encoders out there, unfortunately, that create 0-gain frames\n");
-    fprintf(stderr,"with other audio data in the frame.\n");
-    fprintf(stderr,"As long as the global gain is 0, you'll never hear the data.\n");
-    fprintf(stderr,"But if you lower the gain on such a file, the global gain is suddenly _huge_.\n");
-    fprintf(stderr,"If you play this modified file, there might be a brief, very loud blip.\n");
-    fprintf(stderr,"\n");
-    fprintf(stderr,"So now the default behavior of mp3gain is to _not_ wrap gain changes.\n");
-    fprintf(stderr,"In other words,\n");
-    fprintf(stderr,"1) If the gain change would make a frame's global gain drop below 0,\n");
-    fprintf(stderr,"   then the global gain is set to 0.\n");
-    fprintf(stderr,"2) If the gain change would make a frame's global gain grow above 255,\n");
-    fprintf(stderr,"   then the global gain is set to 255.\n");
-    fprintf(stderr,"3) If a frame's global gain field is already 0, it is not changed, even if\n");
-    fprintf(stderr,"   the gain change is a positive number\n");
-    fprintf(stderr,"\n");
-    fprintf(stderr,"To use the original \"wrapping\" behavior, use the \"%cw\" switch.\n",SWITCH_CHAR);
-    exit(0);
-
-}
-
-
-
 static
 void errUsage(char *progname) {
 	showVersion(progname);
@@ -912,8 +863,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%co - output is a database-friendly tab-delimited list\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cq - Quiet mode: no status messages\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
-        fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
-        fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
 		fprintf(stderr,"If you specify %cr and %ca, only the second one will work\n",SWITCH_CHAR,SWITCH_CHAR);
         fclose(stdout);
         fclose(stderr);
@@ -1034,18 +983,6 @@ int main(int argc, char **argv) {
 				case 'h':
 				case 'H':
 				case '?':
-					if ((argv[i][2] == 'w')||(argv[i][2] == 'W')) {
-						wrapExplanation();
-					}
-					else {
-						if (i+1 < argc) {
-							if ((argv[i+1][0] == 'w')||(argv[i+1][0] =='W'))
-                                wrapExplanation();
-						}
-						else {
-							fullUsage(argv[0]);
-						}
-					}
 					fullUsage(argv[0]);
 					break;
 
@@ -1094,11 +1031,6 @@ int main(int argc, char **argv) {
                     fclose(stderr);
 					exit(0);
 					
-				case 'w':
-				case 'W':
-					wrapGain = !0;
-					break;
-
 				case 'e':
 				case 'E':
 					analysisTrack = !0;
