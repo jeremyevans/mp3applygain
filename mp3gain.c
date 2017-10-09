@@ -114,7 +114,6 @@ double lastfreq = -1.0;
 int whichChannel = 0;
 int BadLayer = 0;
 int LayerSet = 0;
-int Reckless = 0;
 int wrapGain = 0;
 
 int gSuccess;
@@ -631,7 +630,7 @@ int changeGain(char *filename AACGAIN_ARG(AACGainHandle aacH), int leftgainchang
   outfilename = NULL;
   frame = 0;
   BadLayer = 0;
-  LayerSet = Reckless;
+  LayerSet = 0;
 
   NowWriting = !0;
 
@@ -1018,8 +1017,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t%cq - Quiet mode: no status messages\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cp - Preserve original file timestamp\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cx - Only find max. amplitude of file\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cf - Assume input file is an MPEG 2 Layer III file\n",SWITCH_CHAR);
-		fprintf(stderr,"\t     (i.e. don't check for mis-named Layer I or Layer II files)\n");
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
@@ -1131,11 +1128,6 @@ int main(int argc, char **argv) {
 							errUsage(argv[0]);
 						}
 					}
-					break;
-
-				case 'f':
-				case 'F':
-					Reckless = 1;
 					break;
 
 				case 'g':
@@ -1374,7 +1366,7 @@ int main(int argc, char **argv) {
 				}
                   {
 				    BadLayer = 0;
-				    LayerSet = Reckless;
+				    LayerSet = 0;
 				    maxgain = 0;
 				    mingain = 255;
 				    inbuffer = 0;
