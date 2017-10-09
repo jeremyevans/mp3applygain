@@ -41,9 +41,6 @@
 #define M3G_ERR_WRITE      -7
 #define M3G_ERR_TAGFORMAT  -8
 
-#include "rg_error.h"
-
-
 typedef enum {
     storeTime,
     setStoredTime
@@ -80,7 +77,5 @@ struct MP3GainTagInfo {
 	int dirty; /* flag if data changes after loaded from file */
   int recalc; /* Used to signal if recalculation is required */
 };
-
-void passError(MMRESULT lerrnum, int numStrings, ...);
 
 #endif
