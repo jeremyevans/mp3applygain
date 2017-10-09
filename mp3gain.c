@@ -118,7 +118,6 @@ int Reckless = 0;
 int wrapGain = 0;
 int undoChanges = 0;
 
-int forceRecalculateTag = 0;
 int checkTagOnly = 0;
 static int useId3 = 0;
 
@@ -1142,9 +1141,6 @@ void fullUsage(char *progname) {
 		fprintf(stderr,"\t     (i.e. don't check for mis-named Layer I or Layer II files)\n");
 		fprintf(stderr,"\t%c? or %ch - show this message\n",SWITCH_CHAR,SWITCH_CHAR);
 		fprintf(stderr,"\t%cs c - only check stored tag info (no other processing)\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cs r - force re-calculation (do not read tag info)\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cs i - use ID3v2 tag for MP3 gain info\n",SWITCH_CHAR);
-		fprintf(stderr,"\t%cs a - use APE tag for MP3 gain info (default)\n",SWITCH_CHAR);
 		fprintf(stderr,"\t%cu - undo changes made (based on stored tag info)\n",SWITCH_CHAR);
         fprintf(stderr,"\t%cw - \"wrap\" gain change if gain+change > 255 or gain+change < 0\n",SWITCH_CHAR);
         fprintf(stderr,"\t      (use \"%c? wrap\" switch for a complete explanation)\n",SWITCH_CHAR);
@@ -1398,20 +1394,6 @@ int main(int argc, char **argv) {
                         case 'C':
                             checkTagOnly = !0;
                             break;
-                        case 'r':
-                        case 'R':
-                            forceRecalculateTag = !0;
-                            break;
-						case 'i':
-						case 'I':
-							useId3 = 1;
-							break;
-						case 'a':
-						case 'A':
-							useId3 = 0;
-							break;
-						default:
-							errUsage(argv[0]);
                     }
 
                     break;
