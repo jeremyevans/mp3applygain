@@ -24,7 +24,7 @@ uninstall:
 	rm -f "$(INSTALL_PATH)/mp3applygain" "$(INSTALL_MAN_PATH)/mp3applygain.1"
 
 clean: 
-	rm -f mp3applygain
+	rm -f mp3applygain mp3applygain-*.tar.gz
 
 dist: clean
 	cd .. && tar -s '/mp3applygain/mp3applygain-${VERSION}/' \
