@@ -9,7 +9,7 @@ CFLAGS+= -Wall
 INSTALL_PATH= /usr/local/bin
 INSTALL_MAN_PATH= /usr/local/man/man1
 LIBS= -lm
-VERSION = 1.0.0
+VERSION = 1.1.0
 
 all: mp3applygain
 
