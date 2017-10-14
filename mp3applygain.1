@@ -1,0 +1,83 @@
+.Dd $Mdocdate: October 13 2017 $
+.Dt MP3APPLYGAIN 1
+.Os
+.Sh NAME
+.Nm mp3applygain
+.Nd apply replaygain to mp3 audio data
+.Sh SYNOPSIS
+.Nm mp3applygain
+.Ar gain mod file
+.Sh DESCRIPTION
+The
+.Nm
+program applies replaygain to mp3 audio data, decreasing
+or increasing the volume of the
+.Ar file
+based on the
+.Ar gain
+and
+.Ar mod
+arguments.
+It is designed for use with mp3 players that do not support
+replaygain information stored in ID3v2 or APEv2 tags, which
+is common in hardware mp3 players.
+.Pp
+The
+.Ar gain
+argument should be an integer or floating point number
+of decibels to increase the volume.
+This can be negative to decrease the volume.
+.Pp
+The
+.Ar mod
+argument should be an integer to modify the calculated gain
+adjustment for each mp3 audio data frame.
+This number can also be positive to increase the calculated
+gain or negative to decrease it.
+This number corresponds to the
+.Fl m
+flag of the
+.Nm mp3gain
+program, and performs the same function.
+.Sh EXIT STATUS
+The
+.Nm
+program returns with exit code 0 if there is no error.
+If there is an error, the
+.Nm
+program returns with exit code 1 and prints an error
+to stderr.
+.Sh EXAMPLES
+To increase the volume of an mp3 file by 10.5 decibels:
+.Pp
+.Dl $ mp3applygain 10.5 0 foo.mp3
+.Pp
+To decrease the volume of an mp3 file by 5 decibels,
+and also modify the calcuated gain in each frame to
+decrease it by 1:
+.Pp
+.Dl $ mp3applygain -5 -1 foo.mp3
+.Sh SEE ALSO
+.Xr mp3gain 1
+.Sh HISTORY
+The
+.Nm
+program was originally derived from the
+.Nm mp3gain
+program, with most of functionality being removed,
+such as the ability to calculate replaygain.
+The only part remaining is the part that applies
+gain to an mp3 file.
+.Sh CAVEATS
+The
+.Nm
+program modifies the mp3 file itself, and does not
+store undo information.
+It should only be run on disposable copies of an
+mp3 file, and not on the only remaining copy.
+If this is run on the only remaining copy, the changes
+it makes can be undone by running the program with the
+.Ar gain
+and
+.Ar mod
+arguments multipled by -1.
