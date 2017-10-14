@@ -352,9 +352,11 @@ int main(int argc, char **argv) {
 	double arg_db, db;
 	int arg_mod, gainchange;
 
+#ifdef __OpenBSD__
 	if(pledge("rpath stdio wpath", NULL) != 0) {
 		err(1, NULL);
 	}
+#endif
 
 	if (argc != 4) {
 		fprintf(stderr, "Usage: mp3applygain gain mod filename\n");
@@ -378,9 +380,11 @@ int main(int argc, char **argv) {
 	if (inf == NULL) {
 		err(1, "%s", filename);
 	}
+#ifdef __OpenBSD__
 	if(pledge("stdio", NULL) != 0) {
 		err(1, NULL);
 	}
+#endif
 
 	writebuffercnt = 0;
 	inbuffer = 0;
